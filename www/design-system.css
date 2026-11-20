@@ -1,0 +1,30 @@
+:root{
+  --ui-surface-0:#090d13;--ui-surface-1:#111822;--ui-surface-2:#18212d;--ui-surface-3:#202b3a;
+  --ui-border:#2a3647;--ui-border-strong:#40516a;--ui-accent:#3478e5;--ui-accent-strong:#2364cf;
+  --ui-text:#edf3fa;--ui-text-muted:#9eacc0;--ui-focus:#a9cbff;
+  --ui-radius-s:8px;--ui-radius-m:12px;--ui-radius-l:16px;
+  --ui-shadow-1:0 8px 24px rgb(0 0 0/.22);--ui-shadow-2:0 18px 48px rgb(0 0 0/.38);
+}
+*{scrollbar-width:thin;scrollbar-color:#40516a #0d131c}
+*::-webkit-scrollbar{inline-size:10px;block-size:10px}
+*::-webkit-scrollbar-track{background:#0d131c}
+*::-webkit-scrollbar-thumb{border:2px solid #0d131c;border-radius:999px;background:#40516a}
+*::-webkit-scrollbar-thumb:hover{background:#586d8a}
+::selection{background:#316dcc;color:#fff}
+button,a,input{accent-color:var(--ui-accent)}
+button,a{transition:background-color .16s ease,border-color .16s ease,color .16s ease,opacity .16s ease}
+:focus-visible{outline:2px solid var(--ui-focus);outline-offset:3px}
+.home-view{scrollbar-gutter:stable;overscroll-behavior:contain}
+.dash-widget,.device-card{border-color:var(--ui-border);background:var(--ui-surface-1)}
+.dash-widget>header{border-color:var(--ui-border);background:color-mix(in srgb,var(--ui-surface-2) 72%,transparent)}
+.dash-widget-icon{background:#1b304a;color:#9cc5ff}
+.dash-customize,.dash-secondary,.home-refresh,.room-button,.device-manage button{border-color:var(--ui-border-strong);background:var(--ui-surface-2)}
+.dash-customize:hover,.dash-secondary:hover,.home-refresh:hover,.room-button:hover,.device-manage button:hover{border-color:#6680a4;background:var(--ui-surface-3)}
+.dash-primary{border-color:var(--ui-accent);background:var(--ui-accent-strong)}
+.dash-dialog{border:0;background:var(--ui-surface-1);box-shadow:var(--ui-shadow-2);scrollbar-gutter:stable}
+.dash-dialog::backdrop{background:rgb(3 7 12/.84)}
+.dash-size>div,.calendar-tabs{background:var(--ui-surface-0)}
+.dash-size input:checked+label,.calendar-tabs button[aria-selected="true"]{background:var(--ui-accent-strong);color:#fff}
+.calendar-tabs button{position:relative}
+.calendar-tabs button[aria-selected="true"]::after{content:"";position:absolute;inset:auto 8px 3px;border-block-end:2px solid currentColor}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}}

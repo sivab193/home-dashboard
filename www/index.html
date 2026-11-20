@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="en">
+<head>
+<script>
+if (location.protocol.startsWith('http')) {
+  const base = document.createElement('base'); base.href = '/'; document.head.append(base);
+}
+</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0e13">
+<link rel="stylesheet" href="dialogs.css?v=1">
+<link rel="stylesheet" href="room.css?v=8">
+<link rel="stylesheet" href="vendor/ios26/tokens.css?v=1">
+<link rel="stylesheet" href="dashboard.css?v=6">
+<link rel="stylesheet" href="design-system.css?v=3">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<title>Home Dashboard</title>
+<style>
+  :root{
+    --bg:#0b0e13; --panel:#14181f; --panel2:#1a1f28; --line:#242c38;
+    --text:#e7ecf3; --muted:#9ba6b6; --faint:#8a95a6;
+    --accent:#1d5fd1; --live:#37d67a; --amber:#f5a623; --danger:#c83b3b;
+    --radius:14px; --cols:2; --tileW:320px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:var(--bg); color:var(--text); overflow:hidden;
+    font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    display:flex; flex-direction:column; height:100vh;
+  }
+
+  /* ---------- header ---------- */
+  header{
+    flex:0 0 auto; display:flex; align-items:center; gap:14px;
+    padding:11px 18px; border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,var(--panel),#101319);
+  }
+  .brand{display:flex;align-items:center;gap:11px;font-weight:660;letter-spacing:.2px;font-size:15px}
+  .brand .logo{
+    width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-size:16px;
+    background:linear-gradient(135deg,#2b6bff,#1b3a86); box-shadow:0 2px 10px rgba(0,0,0,.35);
+  }
+  .brand small{color:var(--muted);font-weight:500;font-size:12px;margin-left:2px}
+  .spacer{flex:1}
+  .count{
+    display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);
+    background:var(--panel2);border:1px solid var(--line);padding:5px 11px;border-radius:999px;
+  }
+  .count .dot{width:8px;height:8px;border-radius:50%;background:var(--live)}
+
+  /* segmented DVR filter */
+  .seg{display:inline-flex;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
+  .seg button{
+    border:0;background:transparent;color:var(--muted);font-size:12px;font-weight:600;
+    padding:5px 12px;border-radius:7px;cursor:pointer;transition:.15s;
+  }
+  .seg button:hover{color:var(--text)}
+  .seg button.on{background:var(--accent);color:#fff}
+
+  .hd-toggle{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--muted);user-select:none}
+  .switch{position:relative;width:40px;height:22px;border-radius:999px;background:#2a323f;
+    border:1px solid var(--line);cursor:pointer;transition:.18s;flex:0 0 auto}
+  .switch::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;
+    background:#c7cfdb;transition:.18s}
+  .switch.on{background:var(--accent);border-color:var(--accent)}
+  .switch.on::after{transform:translateX(18px);background:#fff}
+  .iconbtn{
+    width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);
+    color:var(--text);cursor:pointer;display:grid;place-items:center;font-size:15px;transition:.15s;
+  }
+  .iconbtn:hover{border-color:var(--accent);color:#fff}
+  #clock{font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px;min-width:70px;text-align:right}
+
+  /* ---------- stage ---------- */
+  .stage{position:relative;flex:1;min-height:0}
+
+  .grid{
+    position:absolute;inset:0;display:flex;flex-wrap:wrap;gap:10px;padding:12px;
+    align-content:center;justify-content:center;
+  }
+  .tile{
+    position:relative;width:var(--tileW);aspect-ratio:16/9;flex:0 0 auto;
+    background:#000;border:1px solid var(--line);border-radius:var(--radius);
+    overflow:hidden;cursor:pointer;transition:border-color .15s, transform .12s;
+  }
+  .tile:hover{border-color:#3d4a63;transform:translateY(-1px)}
+  .tile:hover .expand{opacity:1}
+
+  video-stream{position:absolute;inset:0;display:block;width:100%;height:100%}
+  video-stream video{width:100%!important;height:100%!important;object-fit:cover;pointer-events:none;background:#000}
+  video-stream .info{display:none!important}
+  video-stream video::-webkit-media-controls,
+  video-stream video::-webkit-media-controls-enclosure{display:none!important}
+
+  .label{
+    position:absolute;left:9px;bottom:9px;z-index:4;display:flex;align-items:center;gap:7px;
+    background:rgba(7,10,15,.72);backdrop-filter:blur(7px);padding:4px 10px;border-radius:8px;
+    font-size:12px;font-weight:600;letter-spacing:.3px;pointer-events:none;
+  }
+  .label .sig{width:7px;height:7px;border-radius:50%;background:var(--amber);transition:.3s}
+  .tile.live .label .sig{background:var(--live)}
+  .badge{
+    position:absolute;right:9px;top:9px;z-index:4;font-size:11px;font-weight:700;letter-spacing:.5px;
+    padding:3px 7px;border-radius:6px;background:rgba(7,10,15,.72);backdrop-filter:blur(7px);
+    color:var(--muted);pointer-events:none;
+  }
+  .badge.hd{color:#dfe8ff;background:rgba(79,140,255,.28)}
+  .expand{
+    position:absolute;right:9px;bottom:9px;z-index:4;opacity:0;transition:.15s;
+    width:28px;height:28px;border-radius:8px;background:rgba(7,10,15,.72);backdrop-filter:blur(7px);
+    display:grid;place-items:center;font-size:13px;color:var(--text);pointer-events:none;
+  }
+  .spinner{position:absolute;inset:0;z-index:3;display:grid;place-items:center;pointer-events:none}
+  .tile.live .spinner{display:none}
+  .spinner i{width:22px;height:22px;border-radius:50%;border:2px solid rgba(255,255,255,.18);
+    border-top-color:var(--accent);animation:spin .8s linear infinite;display:block}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .tile.offline{cursor:default;border-style:dashed;border-color:#2c3542;background:#0d1117}
+  .tile.offline:hover{transform:none;border-color:#2c3542}
+  .offbox{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--faint)}
+  .offbox .ico{font-size:24px;opacity:.7}
+  .offbox .t{font-size:13px;font-weight:600;color:var(--muted)}
+  .offbox .s{font-size:11px}
+
+  /* ---------- focus view ---------- */
+  .focus{position:absolute;inset:0;z-index:20;background:#000;display:none;flex-direction:column}
+  .focus.show{display:flex}
+  .focus .fvideo{position:relative;flex:1;min-height:0;background:#000}
+  .focus video-stream video{object-fit:contain}
+  .focus .topbar{
+    position:absolute;top:0;left:0;right:0;z-index:5;display:flex;align-items:center;gap:12px;
+    padding:14px 16px;background:linear-gradient(180deg,rgba(6,9,13,.85),rgba(6,9,13,0));pointer-events:none;
+  }
+  .focus .topbar > *{pointer-events:auto}
+  .back{
+    display:inline-flex;align-items:center;gap:8px;background:rgba(20,24,31,.85);border:1px solid var(--line);
+    color:var(--text);padding:8px 14px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;
+  }
+  .back:hover{border-color:var(--accent)}
+  .focus .fname{font-size:15px;font-weight:660;display:flex;align-items:center;gap:9px}
+  .focus .fname .sig{width:8px;height:8px;border-radius:50%;background:var(--live)}
+  .nav{
+    position:absolute;top:50%;transform:translateY(-50%);z-index:5;width:46px;height:46px;border-radius:50%;
+    background:rgba(20,24,31,.7);border:1px solid var(--line);color:#fff;cursor:pointer;font-size:20px;
+    display:grid;place-items:center;transition:.15s;
+  }
+  .nav:hover{background:var(--accent);border-color:var(--accent)}
+  .nav.prev{left:16px} .nav.next{right:16px}
+
+  /* ---------- alerts ---------- */
+  .bell{position:relative}
+  .bell .n{
+    position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;border-radius:8px;
+    background:var(--danger);color:#fff;font-size:11px;font-weight:700;
+    display:grid;place-items:center;padding:0 4px;
+  }
+  .alertbar{
+    position:absolute;left:50%;top:14px;transform:translateX(-50%);z-index:30;
+    display:none;align-items:center;gap:10px;max-width:min(92%,560px);
+    background:rgba(26,15,18,.92);border:1px solid var(--danger);border-radius:12px;
+    padding:10px 16px;font-size:13px;font-weight:600;backdrop-filter:blur(8px);
+    box-shadow:0 8px 30px rgba(0,0,0,.5);
+  }
+  .alertbar.show{display:flex}
+  .alertbar .ic{font-size:16px}
+  .tile.alerting{border-color:var(--danger);animation:alertpulse 1.2s ease-in-out 6}
+  @keyframes alertpulse{50%{border-color:#ff8a8a;filter:brightness(1.15)}}
+  .drawer{
+    position:absolute;right:12px;top:12px;bottom:12px;width:min(340px,85vw);z-index:25;
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    display:none;flex-direction:column;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.5);
+  }
+  .drawer.show{display:flex}
+  .drawer h3{margin:0;padding:13px 16px;font-size:13px;border-bottom:1px solid var(--line);
+    display:flex;justify-content:space-between;align-items:center}
+  .drawer h3 button{border:0;background:none;color:var(--muted);cursor:pointer;font-size:15px}
+  .evlist{flex:1;overflow-y:auto;padding:8px}
+  .ev{display:flex;gap:10px;padding:9px;border-radius:10px;align-items:flex-start}
+  .ev:hover{background:var(--panel2)}
+  .ev img{width:74px;aspect-ratio:16/9;object-fit:cover;border-radius:6px;flex:0 0 auto}
+  .ev .ic2{font-size:17px;width:24px;text-align:center;flex:0 0 auto;margin-top:2px}
+  .ev .msg{font-size:12px;line-height:1.4}
+  .ev .when{font-size:11px;color:var(--faint);margin-top:2px}
+  .ev.recover{opacity:.55}
+  .evempty{color:var(--faint);font-size:12px;text-align:center;padding:30px 10px}
+  .nightdot{margin-left:5px;font-size:11px}
+
+  /* ---------- Home Dashboard home controls ---------- */
+  .appnav{display:inline-flex;gap:3px;padding:3px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;overflow-x:auto;overscroll-behavior-inline:contain}
+  .appnav a{position:relative;flex:none;color:var(--muted);font:600 12px/1.2 inherit;padding:7px 12px;border-radius:7px;text-decoration:none;white-space:nowrap}
+  .appnav a:hover{color:var(--text);background:#202a38}
+  .appnav a[aria-current="page"]{background:var(--accent);color:#fff}
+  .appnav a[aria-current="page"]::after{content:"";position:absolute;inset:auto 8px 3px;border-block-end:2px solid currentColor}
+  .home-view{position:absolute;inset:0;display:none;overflow-y:auto;scrollbar-gutter:stable;overscroll-behavior:contain;padding:24px max(22px,calc(22px + env(safe-area-inset-right))) calc(30px + env(safe-area-inset-bottom)) max(22px,calc(22px + env(safe-area-inset-left)))}
+  .home-view.show{display:block}.home-head{display:flex;align-items:center;justify-content:space-between;margin:0 auto 26px;max-width:1050px}.home-head h1,.room h2{margin:0}.home-head p,.device-card p{margin:4px 0 0;color:var(--muted)}
+  .home-actions,.room-head,.room-head>div,.device-manage,.device-group-actions{display:flex;align-items:center;gap:7px}.home-refresh{border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--text);padding:8px 11px;cursor:pointer}.room{max-width:1050px;margin:0 auto 28px}.room-head{justify-content:space-between;margin-bottom:12px}.room h2{font-size:15px;margin:0}.room-button,.device-manage button{border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--muted);padding:5px 8px;font-size:11px;cursor:pointer}.room-off{color:#ffb6b6}.room-button:disabled{opacity:.45;cursor:not-allowed}.room-empty{color:var(--faint);font-size:12px;margin:4px}.device-group+.device-group,.device-group+.device-grid{margin-top:22px}.device-group-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 2px 10px;padding-top:12px;border-top:1px solid var(--line)}.device-group:first-child .device-group-head{padding-top:0;border-top:0}.device-group-head h3{margin:0;font-size:14px}.device-group-head p{margin:3px 0 0;color:var(--faint);font-size:11px}.device-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}.device-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px}.device-card.is-on{border-color:#39705a;box-shadow:inset 0 0 0 1px rgba(55,214,122,.1)}.device-card.is-offline{opacity:.6}.device-top{display:flex;justify-content:space-between;align-items:center}.device-icon{font-size:25px}.device-state{font-size:12px;color:var(--muted)}.is-on .device-state{color:var(--live)}.device-card h3{margin:13px 0 0;font-size:15px}.device-actions{margin-top:16px}.device-toggle{width:100%;border:0;border-radius:9px;background:#293545;color:var(--text);padding:10px;cursor:pointer;font-weight:650}.is-on .device-toggle{background:rgba(255,92,92,.18);color:#ffb6b6}.device-toggle:disabled{opacity:.5;cursor:not-allowed}.brightness{display:grid;grid-template-columns:1fr auto;gap:7px;margin-top:16px;color:var(--muted);font-size:12px}.brightness input{grid-column:1/-1;width:100%;accent-color:var(--accent)}.device-manage{margin-top:14px;justify-content:flex-end}.home-empty{max-width:430px;text-align:center;margin:16vh auto;color:var(--muted)}.home-empty h2{color:var(--text);margin:10px 0 4px}.home-empty p{margin:0}.home-empty-icon{font-size:40px}
+  .music-card{max-width:1050px;margin:0 auto 28px;padding:16px;display:flex;align-items:center;gap:14px;background:linear-gradient(130deg,#18263a,#171d2b);border:1px solid #314761;border-radius:var(--radius)}.music-card.is-active{border-color:#a16bff;box-shadow:inset 0 0 0 1px rgba(161,107,255,.16)}.music-icon{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:#5b37a7;color:#fff;font-size:23px}.music-copy{flex:1}.music-copy h2{margin:0;font-size:15px}.music-copy p{margin:3px 0 0;color:var(--muted);font-size:12px}.music-actions{display:flex;gap:8px}.music-toggle,.music-stop{border:0;border-radius:9px;padding:9px 12px;color:#fff;cursor:pointer;font-weight:650;background:#6b44c7}.music-stop{background:#394454}.room-button:focus-visible,.device-manage button:focus-visible,.device-toggle:focus-visible{outline:2px solid #9dc4ff;outline-offset:3px}@media(max-width:700px){.music-card{align-items:flex-start;flex-wrap:wrap}.music-actions{width:100%;margin-left:56px}.music-toggle{flex:1}.device-group-head{align-items:flex-start;flex-direction:column}.device-group-actions{width:100%}.device-group-actions .room-button{flex:1;min-height:44px}.device-grid{grid-template-columns:1fr}}
+
+  /* notch / home-indicator safe areas (no-ops on desktop) */
+  header{padding-top:calc(11px + env(safe-area-inset-top))}
+  .nav.prev{left:calc(16px + env(safe-area-inset-left))}
+  .nav.next{right:calc(16px + env(safe-area-inset-right))}
+
+  /* ---------- responsive: tablets & phones scroll instead of fit-all ---------- */
+  @media (max-width:1100px){
+    .grid{
+      align-content:flex-start;overflow-y:auto;-webkit-overflow-scrolling:touch;
+      padding:10px calc(10px + env(safe-area-inset-right))
+              calc(10px + env(safe-area-inset-bottom))
+              calc(10px + env(safe-area-inset-left));
+    }
+    .tile{width:calc(50% - 5px)}
+    .tile:hover{transform:none}
+    .expand{display:none}
+    .back{padding:10px 16px}
+    .nav{width:52px;height:52px}
+  }
+  @media (max-width:700px){
+    .tile{width:100%}
+    header{flex-wrap:wrap;row-gap:8px;padding-left:12px;padding-right:12px}
+    #clock,.brand small{display:none}
+    .seg button{padding:6px 12px}
+  }
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="logo">📹</span>
+      <span>Home Dashboard<small id="hostlbl"></small></span>
+    </div>
+    <span class="count"><span class="dot"></span><span id="countTxt">—</span></span>
+    <nav class="appnav" id="appnav" aria-label="Primary"><a data-view="security" href="/security" aria-current="page">Security</a><a data-view="home" href="/home">Home</a><a data-view="dashboard" href="/dashboard">Dashboard</a></nav>
+    <div class="seg" id="filter">
+      <button data-f="all" class="on">All</button>
+      <button data-f="1">DVR 1</button>
+      <button data-f="2">DVR 2</button>
+    </div>
+    <div class="spacer"></div>
+    <label class="hd-toggle">HD grid <span class="switch" id="hdSwitch" title="Stream the grid in full HD (heavier on the DVR)"></span></label>
+    <button class="iconbtn bell" id="bellBtn" title="Alerts">🔔<span class="n" id="bellN" style="display:none">0</span></button>
+    <button class="iconbtn" id="fsBtn" title="Fullscreen">⛶</button>
+    <span id="clock"></span>
+  </header>
+
+  <div class="stage">
+    <div class="alertbar" id="alertbar"><span class="ic">⚠️</span><span id="alerttxt"></span></div>
+    <div class="drawer" id="drawer">
+      <h3>Alerts <button id="drawerClose">✕</button></h3>
+      <div class="evlist" id="evlist"><div class="evempty">No events</div></div>
+    </div>
+    <div class="grid" id="grid"></div>
+    <main class="home-view" id="homeView"></main>
+
+    <div class="focus" id="focus">
+      <div class="fvideo" id="fvideo"></div>
+      <div class="topbar">
+        <button class="back" id="backBtn">‹ Back to grid</button>
+        <div class="fname"><span class="sig"></span><span id="fname"></span></div>
+        <span class="badge hd">HD</span>
+      </div>
+      <button class="nav prev" id="prevBtn">‹</button>
+      <button class="nav next" id="nextBtn">›</button>
+    </div>
+  </div>
+
+<script src="runtime-config.js"></script>
+<script src="dialogs.js?v=1"></script>
+<script>
+/* ============================ CONFIG ============================ */
+// Served by go2rtc itself (api.static_dir), so same origin; the localhost
+// fallback keeps the page working when opened directly as a file://.
+const nativeShell = location.hostname === "localhost" && location.port === "";
+const savedHost = localStorage.getItem("homeDashboardHost");
+const HOST = new URLSearchParams(location.search).get("host") || savedHost ||
+  (location.protocol.startsWith("http") && !nativeShell ? location.origin : "http://localhost:1984");
+const CAMERAS = [
+  { name:"Cam 1", main:"cam1", sub:"cam1_sub", dvr:1 },
+  { name:"Cam 2", main:"cam2", sub:"cam2_sub", dvr:1 },
+  { name:"Cam 3", main:"cam3", sub:"cam3_sub", dvr:1 },
+  { name:"Cam 4", main:"cam4", sub:"cam4_sub", dvr:1 },
+  { name:"Cam 5", main:"cam5", sub:"cam5_sub", dvr:2 },
+  { name:"Cam 6", main:"cam6", sub:"cam6_sub", dvr:2 },
+  { name:"Cam 7", main:"cam7", sub:"cam7_sub", dvr:2 },
+  { name:"Cam 8", main:"cam8", sub:"cam8_sub", dvr:2 },
+];
+/* =============================================================== */
+
+const s = document.createElement("script");
+s.type = "module"; s.src = HOST + "/video-stream.js";
+document.head.appendChild(s);
+
+const hostLabel = document.getElementById("hostlbl");
+hostLabel.textContent = " · " + HOST.replace(/^https?:\/\//,"");
+hostLabel.title = "Change Home Dashboard server";
+hostLabel.style.cursor = "pointer";
+hostLabel.onclick = async () => {
+  const next = await DashboardUI.prompt("Home Dashboard server address", HOST);
+  if (!next) return;
+  try {
+    const url = new URL(next);
+    if (!/^https?:$/.test(url.protocol)) throw new Error();
+    localStorage.setItem("homeDashboardHost", url.origin);
+    location.reload();
+  } catch (_) { DashboardUI.alert("Enter a full local address, for example http://192.168.0.4:1984"); }
+};
+
+let hd = localStorage.getItem("hdgrid") === "1";
+let filter = localStorage.getItem("dvrfilter") || "all";   // "all" | "1" | "2"
+let available = new Set();
+let cameraHealth = {};
+let focusIndex = -1;
+
+const stage  = document.querySelector(".stage");
+const grid   = document.getElementById("grid");
+const focusEl= document.getElementById("focus");
+const fvideo = document.getElementById("fvideo");
+const fname  = document.getElementById("fname");
+
+function wsFor(name){ return `${HOST}/api/ws?src=${encodeURIComponent(name)}`; }
+function camAvailable(cam){
+  return cameraHealth[cam.main]?.down !== true &&
+    (available.has(cam.sub) || available.has(cam.main));
+}
+function securityVisible(){ return !document.getElementById("homeView").classList.contains("show"); }
+function inFilter(cam){ return filter === "all" || String(cam.dvr) === filter; }
+function visibleCams(){ return CAMERAS.map((c,i)=>({c,i})).filter(x=>inFilter(x.c)); }
+
+function makeStream(name){
+  const el = document.createElement("video-stream");
+  el.mode = "webrtc,mse";
+  el.background = false;
+  el.src = wsFor(name);
+  return el;
+}
+function markLive(tile, el){
+  const check = () => {
+    const v = el.querySelector("video");
+    if (v){
+      v.removeAttribute("controls");
+      const onlive = () => tile.classList.add("live");
+      v.addEventListener("playing", onlive);
+      if (v.readyState >= 3 && !v.paused) onlive();
+    } else requestAnimationFrame(check);
+  };
+  check();
+}
+
+/* fit visible 16:9 tiles as large as possible inside the stage
+   (wide screens only — below 1100px the CSS column layout takes over) */
+function fitLayout(){
+  if (window.matchMedia("(max-width:1100px)").matches){
+    grid.style.removeProperty("--tileW");
+    grid.style.removeProperty("--cols");
+    return;
+  }
+  const n = visibleCams().length;
+  if (!n) return;
+  const gap = 10, pad = 12;
+  const W = stage.clientWidth  - pad*2;
+  const H = stage.clientHeight - pad*2;
+  let best = { cols:1, w:0 };
+  for (let cols=1; cols<=n; cols++){
+    const rows = Math.ceil(n/cols);
+    const w = Math.min((W - gap*(cols-1))/cols, ((H - gap*(rows-1))/rows) * (16/9));
+    if (w > best.w) best = { cols, w };
+  }
+  grid.style.setProperty("--cols", best.cols);
+  grid.style.setProperty("--tileW", Math.floor(best.w) + "px");
+}
+
+function renderGrid(){
+  grid.innerHTML = "";
+  visibleCams().forEach(({c:cam, i}) => {
+    const tile = document.createElement("div");
+    tile.className = "tile";
+    tile.dataset.cam = cam.main;
+    if (!camAvailable(cam)){
+      tile.classList.add("offline");
+      tile.innerHTML = `<div class="offbox">
+          <div class="ico">⃠</div><div class="t">${cam.name}</div>
+          <div class="s">DVR ${cam.dvr} · offline, retrying in background</div></div>`;
+      grid.appendChild(tile);
+      return;
+    }
+    const useMain = hd && available.has(cam.main);
+    const srcName = useMain ? cam.main : (available.has(cam.sub) ? cam.sub : cam.main);
+    tile.innerHTML = `
+      <div class="spinner"><i></i></div>
+      <div class="label"><span class="sig"></span>${cam.name}<span class="nightdot"></span></div>
+      <span class="badge ${useMain?"hd":""}">${useMain?"HD":"SD"}</span>
+      <div class="expand">⤢</div>`;
+    const el = makeStream(srcName);
+    tile.insertBefore(el, tile.firstChild);
+    markLive(tile, el);
+    tile.onclick = () => openFocus(i);
+    tile.ondblclick = () => { openFocus(i); document.documentElement.requestFullscreen?.(); };
+    grid.appendChild(tile);
+  });
+  fitLayout();
+}
+function teardownGrid(){ grid.innerHTML = ""; }
+
+function openFocus(i){
+  focusIndex = i;
+  const cam = CAMERAS[i];
+  teardownGrid();
+  fvideo.innerHTML = "";
+  const srcName = available.has(cam.main) ? cam.main : cam.sub;
+  const el = makeStream(srcName);
+  fvideo.appendChild(el);
+  fname.textContent = cam.name;
+  focusEl.classList.add("show");
+  updateNav();
+}
+function closeFocus(){
+  focusEl.classList.remove("show");
+  fvideo.innerHTML = "";
+  focusIndex = -1;
+  renderGrid();
+}
+function step(dir){
+  const avail = CAMERAS.map((c,idx)=>({c,idx})).filter(x=>camAvailable(x.c) && inFilter(x.c));
+  if(!avail.length) return;
+  let pos = avail.findIndex(x=>x.idx===focusIndex);
+  pos = (pos + dir + avail.length) % avail.length;
+  openFocus(avail[pos].idx);
+}
+function updateNav(){
+  const n = CAMERAS.filter(c=>camAvailable(c)&&inFilter(c)).length;
+  document.getElementById("prevBtn").style.display =
+  document.getElementById("nextBtn").style.display = n > 1 ? "grid" : "none";
+}
+
+async function refreshAvailability(initial){
+  try{
+    const r = await fetch(HOST + "/api/streams", {cache:"no-store"});
+    const data = await r.json();
+    const next = new Set(Object.keys(data || {}));
+    const changed = next.size !== available.size || [...next].some(k=>!available.has(k));
+    available = next;
+    document.getElementById("countTxt").textContent =
+      `${CAMERAS.filter(camAvailable).length} / ${CAMERAS.length} online`;
+    if ((changed || initial) && securityVisible() && !focusEl.classList.contains("show")) renderGrid();
+  }catch(e){
+    const hadCameras = available.size > 0 || focusEl.classList.contains("show");
+    available = new Set();
+    document.getElementById("countTxt").textContent = "CCTV service offline";
+    if (focusEl.classList.contains("show")){
+      focusEl.classList.remove("show");
+      fvideo.innerHTML = "";
+      focusIndex = -1;
+    }
+    if ((hadCameras || initial) && securityVisible()) renderGrid();
+  }
+}
+
+/* ---- controls ---- */
+const hdSwitch = document.getElementById("hdSwitch");
+function paintHd(){ hdSwitch.classList.toggle("on", hd); }
+hdSwitch.onclick = () => { hd = !hd; localStorage.setItem("hdgrid", hd?"1":"0"); paintHd();
+  if(!focusEl.classList.contains("show")) renderGrid(); };
+paintHd();
+
+document.getElementById("filter").addEventListener("click", e=>{
+  const b = e.target.closest("button[data-f]"); if(!b) return;
+  window.navigateDashboard(b.dataset.f === 'all' ? '/security' : `/security/dvr/${b.dataset.f}`);
+});
+document.querySelectorAll("#filter button").forEach(x=>x.classList.toggle("on", x.dataset.f===filter));
+
+document.getElementById("backBtn").onclick = closeFocus;
+document.getElementById("prevBtn").onclick = () => step(-1);
+document.getElementById("nextBtn").onclick = () => step(1);
+document.getElementById("fsBtn").onclick = () =>
+  document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.();
+document.addEventListener("keydown", e => {
+  if(e.key === "Escape" && focusEl.classList.contains("show")) closeFocus();
+  if(focusEl.classList.contains("show")){
+    if(e.key === "ArrowLeft") step(-1);
+    if(e.key === "ArrowRight") step(1);
+  }
+});
+
+/* swipe left/right in focus view to change camera */
+let swipeX = null, swipeY = null;
+focusEl.addEventListener("touchstart", e => {
+  swipeX = e.touches[0].clientX; swipeY = e.touches[0].clientY;
+}, {passive:true});
+focusEl.addEventListener("touchend", e => {
+  if (swipeX === null) return;
+  const dx = e.changedTouches[0].clientX - swipeX;
+  const dy = e.changedTouches[0].clientY - swipeY;
+  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) step(dx < 0 ? 1 : -1);
+  swipeX = swipeY = null;
+}, {passive:true});
+window.addEventListener("resize", () => { if(!focusEl.classList.contains("show")) fitLayout(); });
+
+/* ---- alerts service (optional — the page works fine without it) ---- */
+const ALERTS = window.HOME_DASHBOARD_ALERTS_ORIGIN ||
+  ((location.protocol.startsWith("http")
+    ? `${location.protocol}//${location.hostname}` : "http://localhost") + ":8090");
+const KIND_ICON = {down:"📵", black:"⬛", covered:"🫣", person:"🚶", rider:"🛵", no_helmet:"🪖"};
+let lastEvId = Number(localStorage.getItem("lastEvId") || 0);
+
+function fmtWhen(ts){
+  const d = Date.now()/1000 - ts;
+  if (d < 60) return "just now";
+  if (d < 3600) return Math.floor(d/60) + " min ago";
+  if (d < 86400) return Math.floor(d/3600) + " h ago";
+  return new Date(ts*1000).toLocaleString();
+}
+
+let bannerTimer = null;
+function showBanner(ev){
+  document.getElementById("alerttxt").textContent = ev.message;
+  const bar = document.getElementById("alertbar");
+  bar.classList.add("show");
+  clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(()=> bar.classList.remove("show"), 8000);
+}
+
+function renderEvents(events){
+  const list = document.getElementById("evlist");
+  if (!events.length){ list.innerHTML = '<div class="evempty">No events</div>'; return; }
+  list.innerHTML = events.map(e => `
+    <div class="ev ${e.state}">
+      <span class="ic2">${e.state==="recover" ? "✅" : (KIND_ICON[e.kind]||"⚠️")}</span>
+      <div><div class="msg">${e.message}</div><div class="when">${fmtWhen(e.ts)}</div></div>
+      ${e.snapshot ? `<a href="${ALERTS}/api/snapshots/${e.snapshot}" target="_blank">
+         <img src="${ALERTS}/api/snapshots/${e.snapshot}" loading="lazy"></a>` : ""}
+    </div>`).join("");
+}
+
+function paintHealth(health){
+  const before = CAMERAS.map(cam => cameraHealth[cam.main]?.down === true).join(",");
+  cameraHealth = health || {};
+  const after = CAMERAS.map(cam => cameraHealth[cam.main]?.down === true).join(",");
+  document.getElementById("countTxt").textContent =
+    `${CAMERAS.filter(camAvailable).length} / ${CAMERAS.length} online`;
+  if (before !== after && securityVisible() && !focusEl.classList.contains("show")) renderGrid();
+  document.querySelectorAll(".tile[data-cam]").forEach(t => {
+    const h = health[t.dataset.cam];
+    const dot = t.querySelector(".nightdot");
+    if (dot) dot.textContent = h && h.mode === "night" ? "🌙" : "";
+  });
+}
+
+async function pollAlerts(){
+  try{
+    const [evR, hR] = await Promise.all([
+      fetch(ALERTS + "/api/events?limit=50", {cache:"no-store"}),
+      fetch(ALERTS + "/api/health", {cache:"no-store"}),
+    ]);
+    const events = await evR.json(), health = await hR.json();
+    renderEvents(events); paintHealth(health);
+
+    const alerts1h = events.filter(e => e.state==="alert" && Date.now()/1000 - e.ts < 3600);
+    const badge = document.getElementById("bellN");
+    badge.style.display = alerts1h.length ? "grid" : "none";
+    badge.textContent = alerts1h.length;
+
+    const fresh = events.filter(e => e.id > lastEvId && e.state === "alert");
+    if (fresh.length){
+      lastEvId = Math.max(...events.map(e => e.id));
+      localStorage.setItem("lastEvId", lastEvId);
+      showBanner(fresh[0]);
+      fresh.forEach(e => {
+        const t = document.querySelector(`.tile[data-cam="${e.camera}"]`);
+        if (t){ t.classList.add("alerting"); setTimeout(()=>t.classList.remove("alerting"), 8000); }
+      });
+    }
+  }catch(e){ /* alerts service offline — dashboard still works */ }
+}
+document.getElementById("bellBtn").onclick = () =>
+  document.getElementById("drawer").classList.toggle("show");
+document.getElementById("drawerClose").onclick = () =>
+  document.getElementById("drawer").classList.remove("show");
+setTimeout(pollAlerts, 800);
+setInterval(pollAlerts, 10000);
+
+const clock = document.getElementById("clock");
+setInterval(()=> clock.textContent = new Date().toLocaleTimeString(), 1000);
+clock.textContent = new Date().toLocaleTimeString();
+
+setTimeout(()=> refreshAvailability(true), 400);
+setInterval(()=> refreshAvailability(false), 15000);
+</script>
+<script src="home.js?v=16"></script>
+<script>
+function setAppView(view, remember = true){
+  const smartHome = view === "home" || view === "dashboard";
+  const current = document.querySelector(`#appnav a[data-view="${view}"]`);
+  document.querySelectorAll("#appnav a").forEach(link => link === current ? link.setAttribute("aria-current", "page") : link.removeAttribute("aria-current"));
+  document.getElementById("homeView").classList.toggle("show", smartHome);
+  document.getElementById("grid").style.display = smartHome ? "none" : "flex";
+  document.getElementById("filter").style.display = smartHome ? "none" : "inline-flex";
+  document.querySelector(".hd-toggle").style.display = smartHome ? "none" : "flex";
+  if (smartHome){
+    focusEl.classList.remove("show");
+    fvideo.innerHTML = "";
+    focusIndex = -1;
+    teardownGrid();
+    window.HomeDashboard?.load();
+  } else {
+    renderGrid();
+  }
+  if (remember) localStorage.setItem("homeDashboardView", view);
+}
+document.getElementById("appnav").addEventListener("click", e => {
+  const link = e.target.closest("a[data-view]"); if (!link) return;
+  e.preventDefault(); window.navigateDashboard(link.getAttribute("href"));
+});
+function applyDashboardRoute(){
+  const path = location.protocol === 'file:' ? location.hash.slice(1) : location.pathname;
+  const normalized = path.replace(/\/+$/, '') || '/';
+  const dvr = normalized.match(/^\/security\/dvr\/([12])$/);
+  const dashboard = normalized === '/dashboard' || normalized === '/home/dashboard';
+  const home = normalized === '/home' || normalized === '/home/floorplan' || normalized === '/home/roomview' || normalized === '/home/controls';
+  const smartHome = home || dashboard;
+  filter = dvr ? dvr[1] : 'all';
+  localStorage.setItem('dvrfilter', filter);
+  document.querySelectorAll('#filter button').forEach(button => button.classList.toggle('on', button.dataset.f === filter));
+  focusEl.classList.remove('show'); fvideo.innerHTML = ''; focusIndex = -1;
+  if (smartHome) window.HomeDashboard.setMode(dashboard ? 'dashboard' : normalized === '/home/controls' ? 'controls' : normalized === '/home/roomview' ? 'room' : 'floorplan');
+  setAppView(dashboard ? 'dashboard' : home ? 'home' : 'security');
+  document.title = `Home Dashboard · ${dashboard ? 'Dashboard' : home ? (normalized === '/home/controls' ? 'Home controls' : normalized === '/home/roomview' ? 'Room detail' : 'Home map') : dvr ? 'DVR ' + dvr[1] : 'Security'}`;
+}
+window.navigateDashboard = (path, replace = false) => {
+  const url = new URL(location.href);
+  if (url.protocol === 'file:') url.hash = path;
+  else url.pathname = path;
+  url.searchParams.delete('view');
+  if (url.href !== location.href) history[replace ? 'replaceState' : 'pushState']({}, '', url);
+  applyDashboardRoute();
+};
+window.addEventListener('popstate', applyDashboardRoute);
+const initialPath = location.protocol === 'file:' ? location.hash.slice(1) : location.pathname;
+if (!initialPath || initialPath === '/' || initialPath === '/index.html') {
+  const initialView = new URLSearchParams(location.search).get('view') || localStorage.getItem('homeDashboardView');
+  window.navigateDashboard(initialView === 'dashboard' ? '/dashboard' : initialView === 'home' ? '/home' : '/security', true);
+} else applyDashboardRoute();
+</script>
+</body>
+</html>

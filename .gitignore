@@ -1,0 +1,40 @@
+# Credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+*.jks
+private/
+house-config/
+
+# go2rtc binary — download per-platform, see README
+go2rtc
+go2rtc.exe
+
+# Runtime
+*.log
+alerts/.venv/
+__pycache__/
+alerts/snapshots/
+alerts/models/
+alerts/dataset/
+alerts/home-layout.json
+alerts/diorama.local.json
+alerts/diorama.default.json
+alerts/config.local.yaml
+node_modules/
+.tools/
+home-assistant/config/
+android/.gradle/
+android/build/
+android/app/build/
+data/
+.runtime/
+.impeccable/
+
+.DS_Store
+.claude/settings.local.json

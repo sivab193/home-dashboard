@@ -1,0 +1,21 @@
+/* Adapted subset of packages/svelte/tokens.css, MIT, Dcode Labs.
+ * https://github.com/seunghan91/ios26-design-system
+ * Commit e7e9249f2831dd7c52a9e04ff67f06fee4caeaad; see LICENSE.
+ * Scoped to the two widgets to avoid overriding application tokens.
+ * This is a community implementation, not an Apple-maintained package.
+ */
+.dash-clocks,.dash-stocks {
+  --color-red: #ff383c;
+  --color-orange: #ff8d28;
+  --color-green: #34c759;
+  --gray: #8e8e93;
+  --gray-2: #aeaeb2;
+  --white: #ffffff;
+  --font-family: 'SF Pro', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --text-footnote: 13px;
+  --text-caption1: 12px;
+  --text-caption2: 11px;
+  --lh-footnote: 18px;
+  --lh-caption1: 16px;
+  --lh-caption2: 13px;
+}
