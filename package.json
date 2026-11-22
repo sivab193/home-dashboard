@@ -3,7 +3,13 @@
   "private": false,
   "version": "0.1.0",
   "description": "Home Dashboard local CCTV and smart-home dashboard",
+  "type": "module",
   "scripts": {
+    "dev": "tsx server.ts",
+    "start": "node server.ts",
+    "build:css": "tailwindcss -i src/styles.css -o www/app.css --minify",
+    "build": "npm run build:css && tsc --noEmit",
+    "lint": "tsc --noEmit && node --check www/js/app.js && node --check www/js/api.js && node --check www/js/views/home.js && node --check www/js/views/media.js && node --check www/js/views/weather.js && node --check www/js/views/schedule.js && node --check www/js/views/automations.js && node --check www/js/views/controls.js && node --check www/js/views/security.js && node --check www/js/views/configure-widget.js && node --check www/js/views/config.js",
     "android:add": "cap add android",
     "android:sync": "cap sync android",
     "android:open": "cap open android"
@@ -13,5 +19,12 @@
     "@capacitor/cli": "^7.0.0",
     "@capacitor/core": "^7.0.0",
     "typescript": "5.7.3"
+  },
+  "dependencies": {
+    "@tailwindcss/cli": "^4.3.5",
+    "@types/express": "^5.0.6",
+    "express": "^5.3.0",
+    "tailwindcss": "^4.3.5",
+    "tsx": "^4.23.15"
   }
 }
