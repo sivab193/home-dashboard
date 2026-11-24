@@ -4,6 +4,7 @@ import {
   controlMedia,
   escapeHtml,
   fetchHome,
+  fetchMedia,
   fetchWeather,
   formatTime,
   showToast,
@@ -405,6 +406,7 @@ async function init() {
 
   // Gentle live telemetry refresh
   setInterval(() => fetchHome().catch(() => {}), 30_000);
+  setInterval(() => fetchMedia().catch(() => {}), 5_000);
   setInterval(() => fetchWeather().catch(() => {}), 300_000);
 }
 

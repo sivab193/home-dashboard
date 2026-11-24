@@ -8,6 +8,20 @@ ALL=(dashboard home homeassistant)
 HOST_HOME=false
 if [ "$(uname -s)" = "Darwin" ]; then HOST_HOME=true; fi
 
+# Docker remains the default so installing Podman cannot accidentally start a
+# second copy of the stack beside a running Docker deployment. Select Podman
+# explicitly during the planned cutover with CONTAINER_ENGINE=podman.
+CONTAINER_ENGINE="${CONTAINER_ENGINE:-docker}"
+case "$CONTAINER_ENGINE" in
+  docker|podman) ;;
+  *) echo "CONTAINER_ENGINE must be either docker or podman" >&2; exit 2 ;;
+esac
+if ! command -v "$CONTAINER_ENGINE" >/dev/null 2>&1; then
+  echo "$CONTAINER_ENGINE is not installed or is not on PATH" >&2
+  exit 1
+fi
+COMPOSE=("$CONTAINER_ENGINE" compose)
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -19,6 +33,9 @@ Usage:
   ./stack.sh down
 
 Services: dashboard home homeassistant cctv alerts all
+
+Container engine: Docker by default. Set CONTAINER_ENGINE=podman to use
+Podman Compose after its machine and Compose provider have been configured.
 
 `all` starts dashboard, home, and Home Assistant. Start `cctv` and `alerts`
 explicitly only on the machine assigned to camera processing.
@@ -125,25 +142,25 @@ case "$command" in
   start)
     prepare
     if [ "${#docker_selected[@]}" -gt 0 ]; then
-      docker compose up -d --build "${docker_selected[@]}"
+      "${COMPOSE[@]}" up -d --build "${docker_selected[@]}"
     fi
     if $home_selected; then
-      docker compose rm -sf home >/dev/null 2>&1 || true
+      "${COMPOSE[@]}" rm -sf home >/dev/null 2>&1 || true
       start_host_home
     fi
     ;;
   stop)
-    if [ "${#docker_selected[@]}" -gt 0 ]; then docker compose stop "${docker_selected[@]}"; fi
+    if [ "${#docker_selected[@]}" -gt 0 ]; then "${COMPOSE[@]}" stop "${docker_selected[@]}"; fi
     if $home_selected; then stop_host_home; fi
     ;;
   restart)
     prepare
     if [ "${#docker_selected[@]}" -gt 0 ]; then
-      docker compose up -d --build --force-recreate "${docker_selected[@]}"
+      "${COMPOSE[@]}" up -d --build --force-recreate "${docker_selected[@]}"
     fi
     if $home_selected; then
       stop_host_home
-      docker compose rm -sf home >/dev/null 2>&1 || true
+      "${COMPOSE[@]}" rm -sf home >/dev/null 2>&1 || true
       start_host_home
     fi
     ;;
@@ -154,11 +171,11 @@ case "$command" in
       tail -n 100 "$home_log_file"
     fi
     if [ "${#docker_selected[@]}" -gt 0 ]; then
-      docker compose logs -f --tail=100 "${docker_selected[@]}"
+      "${COMPOSE[@]}" logs -f --tail=100 "${docker_selected[@]}"
     fi
     ;;
   status)
-    docker compose ps -a
+    "${COMPOSE[@]}" ps -a
     if $HOST_HOME; then
       if home_running; then
         echo "home (host bridge): running"
@@ -169,7 +186,7 @@ case "$command" in
     ;;
   down)
     if $HOST_HOME; then stop_host_home; fi
-    docker compose down
+    "${COMPOSE[@]}" down
     ;;
   *) usage; exit 2 ;;
 esac

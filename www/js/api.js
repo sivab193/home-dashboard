@@ -15,9 +15,9 @@ export const store = {
     showWeatherOverlay: true,
     widgetDisplayName: "Mac Studio M2",
     widgetGridSpan: "2x4 Medium",
-    weatherCity: "San Francisco",
-    weatherLat: 37.7749,
-    weatherLon: -122.4194,
+    weatherCity: "West Lafayette, Indiana",
+    weatherLat: 40.4259,
+    weatherLon: -86.9081,
     stockSymbols: "AAPL,NVDA,V,GOOG,META,TSLA",
     worldClocks: [
       { label: "San Francisco", timeZone: "America/Los_Angeles" },
@@ -181,7 +181,17 @@ function loadLocalPrefs() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw);
+    const prefs = JSON.parse(raw);
+    if (
+      prefs.weatherCity === "San Francisco"
+      || (prefs.weatherLat === 37.7749 && prefs.weatherLon === -122.4194)
+    ) {
+      prefs.weatherCity = "West Lafayette, Indiana";
+      prefs.weatherLat = 40.4259;
+      prefs.weatherLon = -86.9081;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+    }
+    return prefs;
   } catch {
     return null;
   }

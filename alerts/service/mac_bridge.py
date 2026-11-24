@@ -42,26 +42,127 @@ class MacBridge:
         try:
             result = self._youtube_tab_script(self.YOUTUBE_MUSIC_STATUS)
             if result == "not_open":
-                return {"available": False, "state": "not_open", "browser": "Brave Browser"}
+                return self._native_music_status()
             parts = (result + "\x1f\x1f").split("\x1f")
             return {"available": True, "state": parts[0], "title": parts[1],
                     "artist": parts[2], "browser": "Brave Browser"}
         except (RuntimeError, subprocess.TimeoutExpired) as exc:
+            native = self._native_music_status()
+            if native["available"]:
+                return native
             return {"available": False, "state": "setup_required",
                     "browser": "Brave Browser", "error": str(exc)}
 
     def music_command(self, action: str) -> dict[str, Any]:
         if not self.available:
             raise RuntimeError("YouTube Music controls are available only on macOS")
-        javascript = self.YOUTUBE_MUSIC_ACTIONS.get(action)
+        if action not in {"play_pause", "toggle", "next", "previous", "prev", "play", "pause"}:
+            raise ValueError("unsupported YouTube Music action")
+        javascript = self.YOUTUBE_MUSIC_ACTIONS.get({
+            "toggle": "play_pause",
+            "play": "play_pause",
+            "pause": "play_pause",
+            "prev": "previous",
+        }.get(action, action))
         if not javascript:
             raise ValueError("unsupported YouTube Music action")
-        result = self._youtube_tab_script(javascript)
+        try:
+            result = self._youtube_tab_script(javascript)
+        except RuntimeError:
+            result = "not_open"
         if result == "not_open":
-            raise RuntimeError("Open music.youtube.com in Brave Browser first")
+            native = self._native_music_status()
+            if native["available"]:
+                native_action = {
+                    "toggle": "play_pause",
+                    "play_pause": "play_pause",
+                    "play": "play_pause",
+                    "pause": "play_pause",
+                    "next": "next",
+                    "previous": "previous",
+                    "prev": "previous",
+                }[action]
+                if self._native_music_command(native_action, native["source"]):
+                    return self.music_status()
+            raise RuntimeError("Open music.youtube.com or a native macOS music app")
         if result in {"no_player", "no_button"}:
             raise RuntimeError("YouTube Music player controls were not found")
         return self.music_status()
+
+    def _native_music_status(self) -> dict[str, Any]:
+        apps = (
+            ("Music", "Apple Music"),
+            ("Spotify", "Spotify"),
+        )
+        for app_name, label in apps:
+            try:
+                if app_name == "Music":
+                    script = [
+                        f'if application "{app_name}" is running then',
+                        f'tell application "{app_name}"',
+                        'set trackName to name of current track',
+                        'set trackArtist to artist of current track',
+                        'set trackDuration to duration of current track',
+                        'set trackPosition to player position',
+                        'set playerState to player state as text',
+                        'return playerState & "\\u001f" & trackName & "\\u001f" & trackArtist & "\\u001f" & (trackDuration as integer) & "\\u001f" & (trackPosition as integer)',
+                        "end tell",
+                        "end if",
+                        'return "not_running"',
+                    ]
+                else:
+                    script = [
+                        f'if application "{app_name}" is running then',
+                        f'tell application "{app_name}"',
+                        'set trackName to name of current track',
+                        'set trackArtist to artist of current track',
+                        'set trackDuration to duration of current track',
+                        'set trackPosition to player position',
+                        'set playerState to player state as text',
+                        'return playerState & "\\u001f" & trackName & "\\u001f" & trackArtist & "\\u001f" & (trackDuration as integer) & "\\u001f" & (trackPosition as integer)',
+                        "end tell",
+                        "end if",
+                        'return "not_running"',
+                    ]
+                result = self._run(script, timeout=4.0)
+            except (RuntimeError, subprocess.TimeoutExpired):
+                continue
+            if result == "not_running" or not result:
+                continue
+            parts = (result + "\x1f\x1f\x1f").split("\x1f")
+            state = parts[0].strip().lower()
+            title = parts[1].strip()
+            if state not in {"playing", "paused", "stopped", "play", "pause"} or not title:
+                continue
+            return {
+                "available": True,
+                "state": state,
+                "title": title,
+                "artist": parts[2].strip(),
+                "duration": max(0, int(parts[3] or 0)),
+                "position": max(0, int(parts[4] or 0)),
+                "browser": label,
+                "source": app_name,
+            }
+        return {"available": False, "state": "not_open"}
+
+    def _native_music_command(self, action: str, app_name: str) -> bool:
+        command = {
+            "play_pause": "playpause",
+            "next": "next track",
+            "previous": "previous track",
+        }[action]
+        try:
+            self._run([
+                f'if application "{app_name}" is running then',
+                f'tell application "{app_name}" to {command}',
+                "return \"ok\"",
+                "end if",
+                'return "not_running"',
+            ], timeout=4.0)
+            return True
+        except (RuntimeError, subprocess.TimeoutExpired):
+            return False
 
     def _youtube_tab_script(self, javascript: str) -> str:
         """Run one fixed JavaScript operation in the first YouTube Music tab."""

@@ -2,7 +2,7 @@ name: home-dashboard
 
 services:
   dashboard:
-    image: nginx:1.27-alpine
+    image: docker.io/library/nginx:1.27-alpine
     restart: unless-stopped
     ports:
       - "1984:80"

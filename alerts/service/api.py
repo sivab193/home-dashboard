@@ -1,5 +1,6 @@
 """Small HTTP API the dashboard polls for events and per-camera state."""
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
@@ -56,6 +57,51 @@ def build_app(bus, monitor, snapshot_dir: Path, home=None, music=None,
               diorama_default: Path | None = None, mac=None, calendar=None) -> FastAPI:
     app = FastAPI(title="cctv-alerts")
     stocks = StockQuotes()
+    dock_config_path = snapshot_dir / "dockspace-config.json"
+    dock_config_defaults = {
+        "userName": "Sarvesh",
+        "studioName": "Illam",
+        "autoHideDock": True,
+        "activeMacTarget": "Mac",
+        "workShiftHours": "9:00 AM - 5:00 PM",
+        "clockFormat": "12-hour",
+        "cloudSync": True,
+        "dockOpacity": 85,
+        "showWeatherOverlay": True,
+        "widgetDisplayName": "Mac",
+        "widgetGridSpan": "2x4 Medium",
+        "weatherCity": "West Lafayette, Indiana",
+        "weatherLat": 40.4259,
+        "weatherLon": -86.9081,
+        "stockSymbols": "AAPL,NVDA,V,GOOG,META,TSLA",
+        "worldClocks": [
+            {"label": "West Lafayette", "timeZone": "America/Indiana/Indianapolis"},
+            {"label": "New York", "timeZone": "America/New_York"},
+            {"label": "London", "timeZone": "Europe/London"},
+            {"label": "Bengaluru", "timeZone": "Asia/Kolkata"},
+            {"label": "Tokyo", "timeZone": "Asia/Tokyo"},
+        ],
+        "homeQuickDeviceIds": [],
+    }
+
+    def read_dock_config() -> dict:
+        if dock_config_path.is_file():
+            try:
+                saved = json.loads(dock_config_path.read_text())
+                if isinstance(saved, dict):
+                    return {**dock_config_defaults, **saved}
+            except (json.JSONDecodeError, OSError):
+                pass
+        return dict(dock_config_defaults)
+
+    def write_dock_config(patch: dict) -> dict:
+        config = read_dock_config()
+        for key, value in patch.items():
+            if key in dock_config_defaults:
+                config[key] = value
+        dock_config_path.parent.mkdir(parents=True, exist_ok=True)
+        dock_config_path.write_text(json.dumps(config, indent=2))
+        return config
 
     @app.get('/api/dashboard/stocks')
     async def stock_quotes(symbols: str = 'AAPL,NVDA,V,GOOG,META,TSLA'):
@@ -233,6 +279,79 @@ def build_app(bus, monitor, snapshot_dir: Path, home=None, music=None,
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    @app.get("/api/config")
+    def dock_config_status():
+        return read_dock_config()
+
+    @app.patch("/api/config")
+    def dock_config_update(patch: dict):
+        return write_dock_config(patch)
+
+    @app.post("/api/config/reset")
+    def dock_config_reset():
+        if dock_config_path.is_file():
+            dock_config_path.unlink()
+        return dict(dock_config_defaults)
+
+    def media_snapshot():
+        raw = mac.music_status() if mac else {"available": False, "state": "unsupported"}
+        available = bool(raw.get("available"))
+        state = str(raw.get("state") or "stopped").lower()
+        playing = state in {"playing", "play"}
+        duration = int(raw.get("duration") or 0)
+        if raw.get("source") == "Spotify" and duration > 1000:
+            duration = duration // 1000
+        position = int(raw.get("position") or 0)
+        title = str(raw.get("title") or "").strip()
+        artist = str(raw.get("artist") or "").strip()
+        source = str(raw.get("browser") or raw.get("source") or "Mac")
+        if not available:
+            title = "No active playback"
+            artist = "Open Apple Music, Spotify, or YouTube Music"
+        return {
+            "playing": playing,
+            "shuffle": False,
+            "repeat": "off",
+            "volume": 68,
+            "positionSec": position,
+            "outputZone": "mac",
+            "outputLabel": "Mac",
+            "source": source,
+            "trackId": "mac-now-playing",
+            "track": {
+                "id": "mac-now-playing",
+                "title": title,
+                "artist": artist,
+                "album": source,
+                "quality": "System playback",
+                "accent": "#ff6370",
+                "durationSec": duration,
+            },
+            "queue": [],
+            "updatedAt": datetime.now(timezone.utc).isoformat(),
+        }
+
+    @app.get("/api/media")
+    def media_status():
+        return media_snapshot()
+
+    @app.post("/api/media/control")
+    def media_control(command: dict):
+        action = str(command.get("action") or "").strip().lower()
+        if action in {"toggle", "play_pause", "play", "pause", "next", "prev", "previous"}:
+            if action == "play":
+                action = "toggle"
+            if action == "pause":
+                action = "toggle"
+            try:
+                mac.music_command(action)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            except RuntimeError as exc:
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
+            return media_snapshot()
+        raise HTTPException(status_code=400, detail="Unsupported media control action")
 
     @app.get("/api/dashboard/mac/calendar")
     def mac_calendar_events(days: int = 14):

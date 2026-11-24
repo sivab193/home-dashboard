@@ -6,7 +6,9 @@ No residence layout or device inventory is bundled. CCTV and alerts are optional
 
 ## Start
 
-Install Docker with Compose v2. macOS also needs Python 3.11+.
+Install Docker with Compose v2, or Podman with a Compose provider. macOS also
+needs Python 3.11+. Docker is the default container engine; select Podman by
+setting `CONTAINER_ENGINE=podman` on `stack.sh` commands.
 
 ```sh
 git clone https://github.com/sivab193/home-dashboard.git
@@ -14,6 +16,34 @@ cd home-dashboard
 cp .env.example .env
 ./stack.sh start dashboard home
 ```
+
+### Podman on macOS
+
+Podman runs Linux containers inside a Podman machine on macOS. Install Podman
+Desktop (recommended by the Podman project), create and start its machine, and
+set up Compose. Verify it before moving the live services:
+
+```sh
+podman machine start
+podman info
+podman compose version
+CONTAINER_ENGINE=podman ./stack.sh status
+```
+
+Keep Docker selected until the planned cutover; merely installing Podman will
+not change the active stack. During cutover, stop the Docker services, start the
+Podman machine, and start the same services with Podman:
+
+```sh
+./stack.sh stop dashboard homeassistant
+CONTAINER_ENGINE=podman ./stack.sh start dashboard homeassistant
+CONTAINER_ENGINE=podman ./stack.sh status
+```
+
+The macOS `home` bridge continues to run directly on the host, independent of
+either container engine. Podman supplies `host.docker.internal` through its
+machine networking, so the existing dashboard proxy configuration is shared by
+both engines.
 
 Open http://localhost:1984/dashboard. On a phone on the same LAN, replace
 localhost with the server address. This app has no user authentication; keep
