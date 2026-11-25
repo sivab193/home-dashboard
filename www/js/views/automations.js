@@ -2,249 +2,178 @@ import {
   addAutomation,
   deleteAutomation,
   escapeHtml,
+  runAutomation,
   showToast,
-  sparklineSvg,
   store,
   toggleAutomation,
 } from "../api.js";
 
 let filterQuery = "";
+const DAYS = [
+  ["mon", "Mon"], ["tue", "Tue"], ["wed", "Wed"], ["thu", "Thu"],
+  ["fri", "Fri"], ["sat", "Sat"], ["sun", "Sun"],
+];
+
+function displayTime(value) {
+  const [hour, minute] = String(value || "00:00").split(":").map(Number);
+  return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" })
+    .format(new Date(2000, 0, 1, hour, minute));
+}
+
+function targetOptions() {
+  const deviceOptions = store.home.items
+    .filter((item) => !item.read_only && ["light", "switch"].includes(item.type))
+    .map((item) => `<option value="device|${escapeHtml(item.id)}">Device · ${escapeHtml(item.name)}</option>`);
+  const groupOptions = store.home.groups
+    .map((group) => `<option value="group|${escapeHtml(group.id)}">Group · ${escapeHtml(group.name)}</option>`);
+  const roomOptions = store.home.rooms
+    .map((room) => `<option value="room|${escapeHtml(room)}">Room · ${escapeHtml(room)}</option>`);
+  return [...groupOptions, ...roomOptions, ...deviceOptions].join("");
+}
 
 export function renderAutomationsView(container, { openQuickFind, openAlerts, openModal }) {
-  const cfg = store.config;
   const { rules, stats } = store.automations;
-  const weather = store.weather;
   const q = filterQuery.trim().toLowerCase();
   const visibleRules = q
-    ? rules.filter(
-        (r) =>
-          r.name.toLowerCase().includes(q) ||
-          r.condition.toLowerCase().includes(q) ||
-          r.action.toLowerCase().includes(q) ||
-          r.status.toLowerCase().includes(q)
-      )
+    ? rules.filter((rule) => [rule.name, rule.condition, rule.action_label, rule.target_name]
+        .some((value) => String(value || "").toLowerCase().includes(q)))
     : rules;
 
   container.innerHTML = `
     <div class="space-y-5">
-      <!-- Page Header -->
       <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <p class="font-mono text-[11px] uppercase tracking-[0.14em] text-on-surface-variant mb-1">
-            <span class="text-primary-container">${escapeHtml(cfg.studioName.toUpperCase())}</span>
-            <span class="mx-1.5 text-outline-strong">/</span>
-            <span>${escapeHtml(cfg.userName.toUpperCase())}</span>
-          </p>
-          <h1 class="font-headline text-[28px] leading-[34px] font-semibold tracking-tight text-on-surface">Climate Automations</h1>
+          <h1 class="font-headline text-[28px] leading-[34px] font-semibold tracking-tight text-on-surface">Automations</h1>
+          <p class="mt-1 text-sm text-on-surface-variant">Run devices, groups, or whole rooms on a schedule.</p>
         </div>
         <div class="flex items-center gap-2 shrink-0">
           <button id="autoNewRuleBtn" type="button" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded bg-primary-container text-on-primary-container text-xs font-semibold hover:brightness-110 whitespace-nowrap">
-            <span class="material-symbols-outlined text-[16px]">add</span>
-            <span>New Rule</span>
+            <span class="material-symbols-outlined text-[16px]">add</span><span>New Automation</span>
           </button>
-          <button id="autoQuickFindBtn" type="button" class="p-2 rounded bg-surface-container-low border border-outline text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high" aria-label="Quick Find">
-            <span class="material-symbols-outlined text-[18px]">search</span>
-          </button>
-          <button id="autoAlertsBtn" type="button" class="relative p-2 rounded bg-surface-container-low border border-outline text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high" aria-label="Open Alerts">
-            <span class="material-symbols-outlined text-[18px]">notifications</span>
-            <span class="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-primary-container"></span>
-          </button>
+          <button id="autoQuickFindBtn" type="button" class="p-2 rounded bg-surface-container-low border border-outline text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high" aria-label="Quick Find"><span class="material-symbols-outlined text-[18px]">search</span></button>
+          <button id="autoAlertsBtn" type="button" class="p-2 rounded bg-surface-container-low border border-outline text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high" aria-label="Open Alerts"><span class="material-symbols-outlined text-[18px]">notifications</span></button>
         </div>
       </div>
 
-      <!-- 4 Climate Telemetry Tiles -->
-      <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-        <div class="dock-surface-card rounded-lg p-4 flex flex-col justify-between gap-3">
-          <div class="flex items-center justify-between">
-            <span class="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant">ACTIVE AUTOMATIONS</span>
-            <span class="w-2 h-2 rounded-full bg-tertiary"></span>
-          </div>
-          <div class="flex items-end justify-between gap-2">
-            <div>
-              <p id="autoActiveCount" class="font-mono text-2xl font-medium text-on-surface tabular-nums">${stats.activeCount}</p>
-              <p class="font-mono text-[11px] mt-0.5"><span class="text-tertiary">+1</span> <span class="text-on-surface-variant">vs yesterday</span></p>
-            </div>
-            ${sparklineSvg([1, 2, 2, 3, 3, stats.activeCount], "#82d8a6", 74, 24)}
-          </div>
-          <p class="font-mono text-[11px] text-on-surface-variant">of ${stats.totalRules} rules</p>
-        </div>
-
-        <div class="dock-surface-card rounded-lg p-4 flex flex-col justify-between gap-3">
-          <div class="flex items-center justify-between">
-            <span class="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant">WINDOW VENTS OPEN</span>
-            <span class="w-2 h-2 rounded-full bg-tertiary"></span>
-          </div>
-          <div class="flex items-end justify-between gap-2">
-            <div>
-              <p id="autoVentsCount" class="font-mono text-2xl font-medium text-on-surface tabular-nums">${stats.ventsOpen}</p>
-              <p class="font-mono text-[11px] text-on-surface-variant mt-0.5">0 vs yesterday</p>
-            </div>
-            ${sparklineSvg([2, 2, 2, 2, 2], "#c3c7cc", 74, 24)}
-          </div>
-          <p class="font-mono text-[11px] text-on-surface-variant">of ${stats.totalVents} vents</p>
-        </div>
-
-        <div class="dock-surface-card rounded-lg p-4 flex flex-col justify-between gap-3">
-          <div class="flex items-center justify-between">
-            <span class="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant">OUTDOOR TEMP</span>
-            <span class="material-symbols-outlined text-[16px] text-primary">partly_cloudy_day</span>
-          </div>
-          <div class="flex items-end justify-between gap-2">
-            <div>
-              <p class="font-mono text-2xl font-medium text-on-surface tabular-nums">${weather ? `${weather.tempF}°F` : "64°F"}</p>
-              <p class="font-mono text-[11px] mt-0.5"><span class="text-primary">-2°F</span> <span class="text-on-surface-variant">vs hour ago</span></p>
-            </div>
-            ${sparklineSvg([68, 67, 66, 65, weather?.tempF ?? 64], "#ffb3b4", 74, 24)}
-          </div>
-          <p class="font-mono text-[11px] text-on-surface-variant">${escapeHtml(weather?.condition || "Partly Cloudy")}</p>
-        </div>
-
-        <div class="dock-surface-card rounded-lg p-4 flex flex-col justify-between gap-3">
-          <div class="flex items-center justify-between">
-            <span class="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant">STUDIO AIR QUALITY</span>
-            <span class="w-2 h-2 rounded-full bg-tertiary"></span>
-          </div>
-          <div class="flex items-end justify-between gap-2">
-            <div>
-              <p class="font-mono text-2xl font-medium text-on-surface tabular-nums">${weather?.aqi ?? 18} AQI</p>
-              <p class="font-mono text-[11px] mt-0.5"><span class="text-tertiary">-4</span> <span class="text-on-surface-variant">vs morning</span></p>
-            </div>
-            ${sparklineSvg([24, 22, 21, 19, weather?.aqi ?? 18], "#82d8a6", 74, 24)}
-          </div>
-          <p class="font-mono text-[11px] text-tertiary">Excellent</p>
-        </div>
-      </section>
-
-      <!-- Automation Rules Table Card -->
-      <section class="dock-surface-card rounded-lg overflow-hidden">
+      <section class="dock-surface-card rounded-lg overflow-hidden" aria-labelledby="automationRulesTitle">
         <div class="px-5 py-4 border-b border-outline flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div class="flex items-center gap-2.5">
-            <span class="material-symbols-outlined text-[18px] text-primary-container">tune</span>
-            <h2 class="font-headline text-[15px] font-semibold text-on-surface">Automation Rules</h2>
+          <div>
+            <h2 id="automationRulesTitle" class="font-headline text-[15px] font-semibold text-on-surface">Time-based rules</h2>
+            <p class="mt-1 text-xs text-on-surface-variant">${stats.activeCount} active of ${stats.totalRules} total</p>
           </div>
-          <div class="flex items-center gap-3">
-            <div class="relative">
-              <span class="material-symbols-outlined text-[16px] text-on-surface-variant absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none">search</span>
-              <input id="autoFilterInput" type="search" value="${escapeHtml(filterQuery)}" placeholder="Filter rules…" aria-label="Filter automation rules" class="pl-8 pr-3 py-1.5 rounded bg-surface-container-lowest border border-outline text-xs text-on-surface placeholder:text-on-surface-variant focus:border-primary-container focus:outline-none w-48" />
-            </div>
-            <span class="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant whitespace-nowrap">${rules.length} RULES CONFIGURED</span>
-          </div>
+          <label class="relative">
+            <span class="sr-only">Filter automations</span>
+            <span class="material-symbols-outlined text-[16px] text-on-surface-variant absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none">search</span>
+            <input id="autoFilterInput" type="search" value="${escapeHtml(filterQuery)}" placeholder="Filter automations…" class="pl-8 pr-3 py-2 rounded bg-surface-container-lowest border border-outline text-base sm:text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary-container focus:outline-none w-full sm:w-64" />
+          </label>
         </div>
 
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse">
-            <thead>
-              <tr class="border-b border-outline font-mono text-[10.5px] uppercase tracking-wider text-on-surface-variant">
-                <th class="py-3 px-5 font-medium">Automation Rule</th>
-                <th class="py-3 px-4 font-medium">Status</th>
-                <th class="py-3 px-4 font-medium">Trigger Condition</th>
-                <th class="py-3 px-4 font-medium">Action</th>
-                <th class="py-3 px-5 font-medium text-right">Manage</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-outline/60 text-[13px]">
-              ${
-                visibleRules.length
-                  ? visibleRules
-                      .map((rule) => {
-                        const isActive = rule.status === "active";
-                        return `
-                      <tr class="hover:bg-surface-container-high/45 transition-colors">
-                        <td class="py-3.5 px-5 font-medium text-on-surface">${escapeHtml(rule.name)}</td>
-                        <td class="py-3.5 px-4">
-                          <button type="button" data-toggle-rule="${escapeHtml(rule.id)}" aria-label="Toggle ${escapeHtml(rule.name)} status (currently ${rule.status})" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                            isActive
-                              ? "bg-tertiary-container/85 text-on-tertiary-container hover:brightness-110"
-                              : "bg-surface-container-highest text-on-surface-variant hover:text-on-surface"
-                          }">
-                            <span class="w-1.5 h-1.5 rounded-full ${isActive ? "bg-on-tertiary-container" : "bg-on-surface-variant"}"></span>
-                            <span>${isActive ? "Active" : "Paused"}</span>
-                          </button>
-                        </td>
-                        <td class="py-3.5 px-4 font-mono text-xs text-on-surface-warm tabular-nums">${escapeHtml(rule.condition)}</td>
-                        <td class="py-3.5 px-4 text-on-surface">${escapeHtml(rule.action)}</td>
-                        <td class="py-3.5 px-5 text-right">
-                          <button type="button" data-delete-rule="${escapeHtml(rule.id)}" class="p-1.5 rounded text-on-surface-variant hover:text-danger hover:bg-surface-container-high" aria-label="Delete ${escapeHtml(rule.name)}">
-                            <span class="material-symbols-outlined text-[17px]">delete</span>
-                          </button>
-                        </td>
-                      </tr>
-                    `;
-                      })
-                      .join("")
-                  : `<tr><td colspan="5" class="py-8 px-5 text-center font-mono text-xs text-on-surface-variant">No automation rules match "${escapeHtml(filterQuery)}".</td></tr>`
-              }
-            </tbody>
-          </table>
-        </div>
+        ${visibleRules.length ? `
+          <div class="divide-y divide-outline/60">
+            ${visibleRules.map((rule) => {
+              const active = rule.enabled;
+              const dayLabel = rule.days.map((day) => day.toUpperCase()).join(", ");
+              return `
+                <article class="px-5 py-4 flex flex-col lg:flex-row lg:items-center gap-4">
+                  <div class="min-w-0 lg:flex-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <h3 class="font-headline text-sm font-semibold text-on-surface">${escapeHtml(rule.name)}</h3>
+                      <span class="px-2 py-0.5 rounded-full text-[11px] font-medium ${active ? "bg-tertiary-container/85 text-on-tertiary-container" : "bg-surface-container-highest text-on-surface-variant"}">${active ? "Active" : "Paused"}</span>
+                    </div>
+                    <p class="mt-1.5 text-sm text-on-surface">${escapeHtml(rule.action_label)}</p>
+                    <p class="mt-1 font-mono text-[11px] text-on-surface-variant">${escapeHtml(displayTime(rule.time))} · ${escapeHtml(dayLabel)} · ${escapeHtml(rule.timezone)}</p>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2 shrink-0">
+                    <button type="button" data-run-rule="${escapeHtml(rule.id)}" class="px-3 py-2 rounded bg-surface-container-high border border-outline text-xs font-medium text-on-surface hover:bg-surface-bright">Run now</button>
+                    <button type="button" data-toggle-rule="${escapeHtml(rule.id)}" class="px-3 py-2 rounded bg-surface-container-high border border-outline text-xs font-medium text-on-surface hover:bg-surface-bright">${active ? "Pause" : "Enable"}</button>
+                    <button type="button" data-delete-rule="${escapeHtml(rule.id)}" class="p-2 rounded text-on-surface-variant hover:text-danger hover:bg-surface-container-high" aria-label="Delete ${escapeHtml(rule.name)}"><span class="material-symbols-outlined text-[18px]">delete</span></button>
+                  </div>
+                </article>`;
+            }).join("")}
+          </div>` : `
+          <div class="px-5 py-12 text-center">
+            <span class="material-symbols-outlined text-[28px] text-on-surface-variant">schedule</span>
+            <h3 class="mt-2 font-headline text-sm font-semibold text-on-surface">${filterQuery ? "No matching automations" : "No automations yet"}</h3>
+            <p class="mt-1 text-xs text-on-surface-variant">${filterQuery ? "Try a different search." : "Create a time-based rule to control your smart devices automatically."}</p>
+          </div>`}
       </section>
-    </div>
-  `;
+    </div>`;
 
   container.querySelector("#autoQuickFindBtn")?.addEventListener("click", openQuickFind);
   container.querySelector("#autoAlertsBtn")?.addEventListener("click", openAlerts);
-
   const filterInput = container.querySelector("#autoFilterInput");
   filterInput?.addEventListener("input", () => {
     filterQuery = filterInput.value;
     const pos = filterInput.selectionStart;
     renderAutomationsView(container, { openQuickFind, openAlerts, openModal });
-    const nextInput = container.querySelector("#autoFilterInput");
-    if (nextInput) {
-      nextInput.focus();
-      nextInput.setSelectionRange(pos, pos);
-    }
+    const next = container.querySelector("#autoFilterInput");
+    next?.focus();
+    next?.setSelectionRange(pos, pos);
   });
 
   container.querySelectorAll("[data-toggle-rule]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       try {
-        const res = await toggleAutomation(btn.getAttribute("data-toggle-rule"));
-        showToast(`${res.rule.name}: ${res.rule.status === "active" ? "Active" : "Paused"}`, "ok");
+        const data = await toggleAutomation(btn.getAttribute("data-toggle-rule"));
+        showToast(`${data.rule.name} ${data.rule.enabled ? "enabled" : "paused"}`, "ok");
       } catch (err) {
-        showToast(err.message || "Could not toggle rule", "error");
+        showToast(err.message || "Could not update the automation", "error");
       }
     });
   });
-
+  container.querySelectorAll("[data-run-rule]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      try {
+        await runAutomation(btn.getAttribute("data-run-rule"));
+        showToast("Automation ran successfully", "ok");
+      } catch (err) {
+        showToast(err.message || "Automation could not run", "error");
+      }
+    });
+  });
   container.querySelectorAll("[data-delete-rule]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       try {
         await deleteAutomation(btn.getAttribute("data-delete-rule"));
-        showToast("Automation rule removed", "ok");
+        showToast("Automation deleted", "ok");
       } catch (err) {
-        showToast(err.message || "Could not remove rule", "error");
+        showToast(err.message || "Could not delete the automation", "error");
       }
     });
   });
 
   container.querySelector("#autoNewRuleBtn")?.addEventListener("click", () => {
+    const options = targetOptions();
     openModal({
-      title: "Add Climate Automation Rule",
-      submitLabel: "Create Rule",
+      title: "New Time-Based Automation",
+      submitLabel: "Create Automation",
       bodyHtml: `
-        <div class="space-y-3">
+        <div class="space-y-4">
           <div>
-            <label for="ruleNameInput" class="block text-xs font-medium text-on-surface-variant mb-1">Rule name</label>
-            <input id="ruleNameInput" name="name" type="text" required placeholder="e.g. Night Acoustic Cooling" class="w-full px-3 py-2 rounded bg-surface-container-lowest border border-outline text-sm text-on-surface focus:border-primary-container focus:outline-none" />
+            <label for="ruleNameInput" class="block text-xs font-medium text-on-surface-variant mb-1">Automation name</label>
+            <input id="ruleNameInput" name="name" type="text" required maxlength="80" placeholder="e.g. Turn everything off at night" class="w-full px-3 py-2 rounded bg-surface-container-lowest border border-outline text-base text-on-surface focus:border-primary-container focus:outline-none" />
           </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div><label for="ruleTimeInput" class="block text-xs font-medium text-on-surface-variant mb-1">Time</label><input id="ruleTimeInput" name="time" type="time" required value="22:00" class="w-full px-3 py-2 rounded bg-surface-container-lowest border border-outline text-base text-on-surface focus:border-primary-container focus:outline-none" /></div>
+            <div><label for="ruleActionInput" class="block text-xs font-medium text-on-surface-variant mb-1">Action</label><select id="ruleActionInput" name="action" required class="w-full px-3 py-2 rounded bg-surface-container-lowest border border-outline text-base text-on-surface focus:border-primary-container focus:outline-none"><option value="turn_off">Turn off</option><option value="turn_on">Turn on</option></select></div>
+          </div>
+          <fieldset>
+            <legend class="text-xs font-medium text-on-surface-variant mb-2">Days</legend>
+            <div class="grid grid-cols-4 sm:grid-cols-7 gap-2">${DAYS.map(([value, label]) => `<label class="flex flex-col items-center gap-1.5 px-2 py-2 rounded bg-surface-container-lowest border border-outline text-xs text-on-surface cursor-pointer"><input type="checkbox" name="days" value="${value}" checked class="w-4 h-4 accent-primary-container" />${label}</label>`).join("")}</div>
+          </fieldset>
           <div>
-            <label for="ruleCondInput" class="block text-xs font-medium text-on-surface-variant mb-1">Trigger condition</label>
-            <input id="ruleCondInput" name="condition" type="text" required placeholder="e.g. Interior > 74°F" class="w-full px-3 py-2 rounded bg-surface-container-lowest border border-outline text-sm font-mono text-on-surface focus:border-primary-container focus:outline-none" />
+            <label for="ruleTargetInput" class="block text-xs font-medium text-on-surface-variant mb-1">Target</label>
+            <select id="ruleTargetInput" name="target" required class="w-full px-3 py-2 rounded bg-surface-container-lowest border border-outline text-base text-on-surface focus:border-primary-container focus:outline-none">${options || `<option value="" disabled selected>No controllable targets available</option>`}</select>
           </div>
-          <div>
-            <label for="ruleActionInput" class="block text-xs font-medium text-on-surface-variant mb-1">Action</label>
-            <input id="ruleActionInput" name="action" type="text" required placeholder="e.g. Open Studio Vents" class="w-full px-3 py-2 rounded bg-surface-container-lowest border border-outline text-sm text-on-surface focus:border-primary-container focus:outline-none" />
-          </div>
-        </div>
-      `,
+        </div>`,
       onSubmit: async (formData) => {
+        const [targetType, ...targetParts] = String(formData.get("target") || "").split("|");
         await addAutomation({
-          name: formData.get("name"),
-          condition: formData.get("condition"),
-          action: formData.get("action"),
+          name: formData.get("name"), time: formData.get("time"), days: formData.getAll("days"),
+          action: formData.get("action"), target_type: targetType, target_id: targetParts.join("|"),
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         });
-        showToast("Climate automation rule added", "ok");
+        showToast("Automation created", "ok");
       },
     });
   });

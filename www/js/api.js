@@ -28,10 +28,10 @@ export const store = {
     ],
     homeQuickDeviceIds: [],
   },
-  home: { rooms: [], items: [], music_reactive_lights: [] },
+  home: { rooms: [], items: [], groups: [], music_reactive_lights: [] },
   automations: {
     rules: [],
-    stats: { activeCount: 3, totalRules: 4, ventsOpen: 2, totalVents: 3 },
+    stats: { activeCount: 0, totalRules: 0 },
   },
   media: null,
   schedule: [],
@@ -252,7 +252,8 @@ export async function fetchHome() {
     Array.isArray(cfg?.rooms) && cfg.rooms.length
       ? cfg.rooms
       : [...new Set(items.map((i) => i.room || "Home"))].sort((a, b) => a.localeCompare(b));
-  store.home = { rooms, items };
+  const groups = Array.isArray(cfg?.groups) ? cfg.groups : [];
+  store.home = { rooms, items, groups };
   notify("home");
   return store.home;
 }
@@ -269,6 +270,35 @@ export async function commandHomeEntity(itemId, action, data = {}) {
 export async function setRoomPower(room, action) {
   await apiFetch(`/api/home/rooms/${encodeURIComponent(room)}/${action}`, { method: "POST" });
   await fetchHome();
+}
+
+export async function updateHomeEntity(itemId, patch) {
+  await apiFetch(`/api/home/entities/${encodeURIComponent(itemId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+  return fetchHome();
+}
+
+export async function saveHomeGroup(payload, groupId = null) {
+  await apiFetch(groupId ? `/api/home/groups/${encodeURIComponent(groupId)}` : "/api/home/groups", {
+    method: groupId ? "PATCH" : "POST",
+    body: JSON.stringify(payload),
+  });
+  return fetchHome();
+}
+
+export async function commandHomeGroup(groupId, action) {
+  const result = await apiFetch(`/api/home/groups/${encodeURIComponent(groupId)}/${action}`, {
+    method: "POST",
+  });
+  await fetchHome();
+  return result;
+}
+
+export async function deleteHomeGroup(groupId) {
+  await apiFetch(`/api/home/groups/${encodeURIComponent(groupId)}`, { method: "DELETE" });
+  return fetchHome();
 }
 
 export async function fetchAutomations() {
@@ -303,6 +333,13 @@ export async function addAutomation(payload) {
 
 export async function deleteAutomation(id) {
   const data = await apiFetch(`/api/automations/${encodeURIComponent(id)}`, { method: "DELETE" });
+  store.automations = { rules: data.rules, stats: data.stats };
+  notify("automations");
+  return data;
+}
+
+export async function runAutomation(id) {
+  const data = await apiFetch(`/api/automations/${encodeURIComponent(id)}/run`, { method: "POST" });
   store.automations = { rules: data.rules, stats: data.stats };
   notify("automations");
   return data;

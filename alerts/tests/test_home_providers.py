@@ -75,6 +75,21 @@ class HomeProviderTests(unittest.TestCase):
         self.assertTrue(home.turn_off_room("Lab")["ok"])
         self.assertEqual(provider.last_command, ("test_switch", "turn_off", None))
 
+    def test_device_groups_persist_and_control_members(self):
+        provider = FakeProvider()
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "layout.json"
+            home = HomeAssistant({}, path, providers=[provider])
+            group = home.add_group({
+                "name": "Lab power", "room": "Lab", "entity_ids": ["test_switch"]})
+
+            result = home.command_group(group["id"], "turn_off")
+            reloaded = HomeAssistant({}, path, providers=[provider])
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(provider.last_command, ("test_switch", "turn_off", None))
+        self.assertEqual(reloaded.groups()[0]["name"], "Lab power")
+
     @patch.dict("os.environ", {
         "HOME_ASSISTANT_URL": "http://homeassistant.invalid:8123",
         "HOME_ASSISTANT_TOKEN": "test-token",

@@ -8,6 +8,7 @@ import os
 import json
 import re
 import threading
+import uuid
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -44,14 +45,14 @@ class HomeAssistant:
 
     def _read_layout(self) -> dict[str, Any]:
         if not self.layout_path or not self.layout_path.is_file():
-            return {"entities": {}, "added": {}, "rooms": []}
+            return {"entities": {}, "added": {}, "rooms": [], "groups": {}}
         try:
             data = json.loads(self.layout_path.read_text())
             return {"entities": data.get("entities", {}), "added": data.get("added", {}),
-                    "rooms": data.get("rooms", [])}
+                    "rooms": data.get("rooms", []), "groups": data.get("groups", {})}
         except (OSError, json.JSONDecodeError):
             log.warning("Ignoring invalid Home dashboard layout file")
-            return {"entities": {}, "added": {}, "rooms": []}
+            return {"entities": {}, "added": {}, "rooms": [], "groups": {}}
 
     def _save_layout(self) -> None:
         if not self.layout_path:
@@ -89,6 +90,7 @@ class HomeAssistant:
     def public_config(self) -> dict[str, Any]:
         return {"enabled": self.enabled, "configured": bool(self.entities),
                 "rooms": self.rooms(),
+                "groups": self.groups(),
                 "entities": [{k: v for k, v in item.items()
                               if k in {"id", "entity_id", "name", "room", "icon", "type", "read_only", "provider",
                                        "device_id", "device_name"}}
@@ -120,6 +122,9 @@ class HomeAssistant:
             for item in self._layout["added"].values():
                 if item.get("room", "Home") == room:
                     item["room"] = name
+            for group in self._layout["groups"].values():
+                if group.get("room") == room:
+                    group["room"] = name
             self._rebuild_entities()
             self._save_layout()
         return self.rooms()
@@ -173,8 +178,76 @@ class HomeAssistant:
                 self._layout["entities"].setdefault(item_id, {})["hidden"] = True
             else:
                 raise KeyError(item_id)
+            for group in self._layout["groups"].values():
+                group["entity_ids"] = [value for value in group.get("entity_ids", [])
+                                       if value != item_id]
             self._rebuild_entities()
             self._save_layout()
+
+    def groups(self) -> list[dict[str, Any]]:
+        return sorted((group.copy() for group in self._layout["groups"].values()),
+                      key=lambda group: (group.get("room", ""), group.get("name", "")))
+
+    def _validate_group(self, values: dict[str, Any], group_id: str | None = None) -> dict[str, Any]:
+        name = str(values.get("name") or "").strip()[:80]
+        room = str(values.get("room") or "").strip()[:60]
+        raw_ids = values.get("entity_ids")
+        if not name:
+            raise ValueError("group name is required")
+        if not room:
+            raise ValueError("group room is required")
+        if not isinstance(raw_ids, list) or not raw_ids:
+            raise ValueError("select at least one device")
+        entity_ids = list(dict.fromkeys(str(value) for value in raw_ids))
+        for item_id in entity_ids:
+            item = self.entities.get(item_id)
+            if not item:
+                raise ValueError("a selected device is no longer available")
+            if item.get("room", "Home") != room:
+                raise ValueError("all group devices must belong to the selected room")
+            if item.get("read_only") or item.get("type") not in {"light", "switch"}:
+                raise ValueError("groups can only contain controllable lights and switches")
+        return {"id": group_id or f"group_{uuid.uuid4().hex[:10]}", "name": name,
+                "room": room, "entity_ids": entity_ids}
+
+    def add_group(self, values: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            group = self._validate_group(values)
+            self._layout["groups"][group["id"]] = group
+            self._save_layout()
+            return group.copy()
+
+    def update_group(self, group_id: str, values: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            current = self._layout["groups"].get(group_id)
+            if not current:
+                raise KeyError(group_id)
+            group = self._validate_group({**current, **values}, group_id)
+            self._layout["groups"][group_id] = group
+            self._save_layout()
+            return group.copy()
+
+    def remove_group(self, group_id: str) -> None:
+        with self._lock:
+            if group_id not in self._layout["groups"]:
+                raise KeyError(group_id)
+            self._layout["groups"].pop(group_id)
+            self._save_layout()
+
+    def command_group(self, group_id: str, action: str) -> dict[str, Any]:
+        group = self._layout["groups"].get(group_id)
+        if not group:
+            raise KeyError(group_id)
+        if action not in {"turn_on", "turn_off"}:
+            raise ValueError("unsupported group action")
+        errors = []
+        targets = list(group.get("entity_ids", []))
+        for item_id in targets:
+            try:
+                self.command(item_id, action)
+            except (KeyError, ValueError, RuntimeError, httpx.HTTPError) as exc:
+                errors.append({"id": item_id, "error": str(exc)})
+        return {"ok": not errors, "action": action, "entities": targets, "errors": errors}
 
     def _set_room_power(self, room: str, action: str) -> dict[str, Any]:
         targets = [item_id for item_id, item in self.entities.items()

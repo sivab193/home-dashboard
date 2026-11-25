@@ -36,6 +36,22 @@ class RoomName(BaseModel):
     name: str = Field(min_length=1, max_length=60)
 
 
+class HomeGroup(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    room: str = Field(min_length=1, max_length=60)
+    entity_ids: list[str] = Field(min_length=1)
+
+
+class AutomationCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    time: str
+    days: list[str] = Field(min_length=1)
+    timezone: str | None = None
+    target_type: str
+    target_id: str
+    action: str
+
+
 class MusicClaim(BaseModel):
     client_id: str = Field(min_length=8, max_length=120)
     name: str = Field(default="This device", max_length=60)
@@ -54,7 +70,8 @@ class MacMusicCommand(BaseModel):
 
 
 def build_app(bus, monitor, snapshot_dir: Path, home=None, music=None,
-              diorama_default: Path | None = None, mac=None, calendar=None) -> FastAPI:
+              diorama_default: Path | None = None, mac=None, calendar=None,
+              automations=None) -> FastAPI:
     app = FastAPI(title="cctv-alerts")
     stocks = StockQuotes()
     dock_config_path = snapshot_dir / "dockspace-config.json"
@@ -231,6 +248,94 @@ def build_app(bus, monitor, snapshot_dir: Path, home=None, music=None,
         if not home or not home.enabled:
             raise HTTPException(status_code=503, detail="Home Assistant is not configured")
         return home.turn_on_room(room)
+
+    @app.post("/api/home/groups")
+    def home_add_group(group: HomeGroup):
+        if not home:
+            raise HTTPException(status_code=503, detail="Home devices are unavailable")
+        try:
+            return home.add_group(group.model_dump())
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.patch("/api/home/groups/{group_id}")
+    def home_edit_group(group_id: str, group: HomeGroup):
+        if not home:
+            raise HTTPException(status_code=503, detail="Home devices are unavailable")
+        try:
+            return home.update_group(group_id, group.model_dump())
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Unknown device group") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.delete("/api/home/groups/{group_id}")
+    def home_remove_group(group_id: str):
+        if not home:
+            raise HTTPException(status_code=503, detail="Home devices are unavailable")
+        try:
+            home.remove_group(group_id)
+            return {"ok": True}
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Unknown device group") from exc
+
+    @app.post("/api/home/groups/{group_id}/{action}")
+    def home_command_group(group_id: str, action: str):
+        if not home or not home.enabled:
+            raise HTTPException(status_code=503, detail="Home devices are unavailable")
+        try:
+            return home.command_group(group_id, action)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Unknown device group") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/api/automations")
+    def automation_list():
+        return automations.snapshot() if automations else {
+            "rules": [], "stats": {"activeCount": 0, "totalRules": 0}}
+
+    @app.post("/api/automations")
+    def automation_add(payload: AutomationCreate):
+        if not automations:
+            raise HTTPException(status_code=503, detail="Automations are unavailable")
+        try:
+            rule = automations.add(payload.model_dump())
+            return {**automations.snapshot(), "rule": rule}
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/automations/{rule_id}/toggle")
+    def automation_toggle(rule_id: str):
+        if not automations:
+            raise HTTPException(status_code=503, detail="Automations are unavailable")
+        try:
+            rule = automations.toggle(rule_id)
+            return {**automations.snapshot(), "rule": rule}
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Unknown automation") from exc
+
+    @app.post("/api/automations/{rule_id}/run")
+    def automation_run(rule_id: str):
+        if not automations:
+            raise HTTPException(status_code=503, detail="Automations are unavailable")
+        try:
+            result = automations.execute(rule_id)
+            return {**automations.snapshot(), "result": result}
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Unknown automation or target") from exc
+        except (ValueError, RuntimeError, httpx.HTTPError) as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    @app.delete("/api/automations/{rule_id}")
+    def automation_remove(rule_id: str):
+        if not automations:
+            raise HTTPException(status_code=503, detail="Automations are unavailable")
+        try:
+            automations.remove(rule_id)
+            return automations.snapshot()
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Unknown automation") from exc
 
     @app.get("/api/home/music-reactive")
     def music_status():

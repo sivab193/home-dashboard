@@ -6,6 +6,7 @@ from pathlib import Path
 import uvicorn
 
 from .api import build_app
+from .automations import AutomationStore
 from .calendar_feed import CalendarFeed
 from .home import HomeAssistant
 from .music import MusicReactive
@@ -39,8 +40,12 @@ def main():
     music = MusicReactive(home, cfg.get("music_reactive", {}))
     calendar = CalendarFeed.from_env(data_dir / "calendar-feed.json")
     calendar.start()
+    automations = AutomationStore(
+        data_dir / "automations.json", home,
+        os.environ.get("HOME_DASHBOARD_TIMEZONE", "America/Indiana/Indianapolis"))
+    automations.start()
     app = build_app(_NoCameraBus(), _NoCameraMonitor(), data_dir, home, music,
-                    config_dir / "diorama.default.json", MacBridge(), calendar)
+                    config_dir / "diorama.default.json", MacBridge(), calendar, automations)
     port = int(os.environ.get("HOME_API_PORT", "8090"))
     logging.getLogger(__name__).info(
         "Home API ready on port %d (%d local provider(s))", port, len(home.providers))

@@ -27,7 +27,7 @@ const ROUTES = [
   { path: "/media", label: "Media", icon: "play_circle", keywords: "audio music airpods speakers queue" },
   { path: "/weather", label: "Weather", icon: "partly_cloudy_day", keywords: "forecast radar humidity wind aqi" },
   { path: "/schedule", label: "Schedule", icon: "calendar_today", keywords: "calendar shift timeline events" },
-  { path: "/climate-automations", label: "Climate Automations", icon: "thermostat", keywords: "rules vents hvac thermostat aqi" },
+  { path: "/automations", label: "Automations", icon: "schedule", keywords: "rules time schedule devices groups rooms" },
   { path: "/controls", label: "Smart Home", icon: "deployed_code", keywords: "lights rooms switches plugs sensors" },
   { path: "/floorplan", label: "3D Floorplan", icon: "view_in_ar", keywords: "diorama 3d map house model" },
   { path: "/security", label: "Security", icon: "videocam", keywords: "cameras cctv dvr streams alerts" },
@@ -306,7 +306,7 @@ function renderCurrentRoute() {
   else if (route === "/media") renderMediaView(main, viewCtx);
   else if (route === "/weather") renderWeatherView(main, viewCtx);
   else if (route === "/schedule") renderScheduleView(main, viewCtx);
-  else if (route === "/climate-automations") renderAutomationsView(main, viewCtx);
+  else if (route === "/automations" || route === "/climate-automations") renderAutomationsView(main, viewCtx);
   else if (route === "/controls") {
     setControlsSubTab("controls");
     renderControlsView(main, viewCtx);

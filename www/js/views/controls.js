@@ -1,12 +1,16 @@
 import {
   apiFetch,
+  commandHomeGroup,
   commandHomeEntity,
+  deleteHomeGroup,
   escapeHtml,
   fetchHome,
   logActivity,
   setRoomPower,
+  saveHomeGroup,
   showToast,
   store,
+  updateHomeEntity,
 } from "../api.js";
 
 let activeSubTab = "controls"; // controls | floorplan
@@ -95,18 +99,45 @@ function renderDeviceCard(item) {
 
       <div class="flex items-center justify-between pt-1 border-t border-outline/50 text-[11px]">
         <span class="font-mono text-on-surface-variant uppercase">${escapeHtml(item.type)}</span>
-        <button type="button" data-delete-device="${escapeHtml(item.id)}" class="text-on-surface-variant hover:text-danger transition-colors font-medium">Remove</button>
+        <div class="flex items-center gap-3">
+          <button type="button" data-edit-device="${escapeHtml(item.id)}" class="text-on-surface-variant hover:text-on-surface transition-colors font-medium">Edit</button>
+          <button type="button" data-delete-device="${escapeHtml(item.id)}" class="text-on-surface-variant hover:text-danger transition-colors font-medium">Remove</button>
+        </div>
       </div>
     </article>
   `;
+}
+
+function renderGroupRow(group, items) {
+  const members = group.entity_ids.map((id) => items.find((item) => item.id === id)).filter(Boolean);
+  const onCount = members.filter((item) => item.state === "on").length;
+  return `
+    <article class="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-outline/60 last:border-b-0">
+      <div class="min-w-0">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-[18px] text-primary-container">device_hub</span>
+          <h3 class="font-headline text-sm font-semibold text-on-surface truncate">${escapeHtml(group.name)}</h3>
+        </div>
+        <p class="mt-1 text-xs text-on-surface-variant">${escapeHtml(group.room)} · ${members.length} device${members.length === 1 ? "" : "s"} · ${onCount} on</p>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <button type="button" data-group-action="turn_on" data-group-id="${escapeHtml(group.id)}" class="px-3 py-2 rounded bg-surface-container-high border border-outline text-xs font-medium text-tertiary hover:bg-surface-bright">Turn on</button>
+        <button type="button" data-group-action="turn_off" data-group-id="${escapeHtml(group.id)}" class="px-3 py-2 rounded bg-surface-container-high border border-outline text-xs font-medium text-on-surface hover:bg-surface-bright">Turn off</button>
+        <button type="button" data-edit-group="${escapeHtml(group.id)}" class="p-2 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high" aria-label="Edit ${escapeHtml(group.name)}">
+          <span class="material-symbols-outlined text-[18px]">edit</span>
+        </button>
+      </div>
+    </article>`;
 }
 
 export function renderControlsView(container, { openQuickFind, openAlerts, openModal, navigate }) {
   const cfg = store.config;
   const rooms = store.home?.rooms || [];
   const items = store.home?.items || [];
+  const groups = store.home?.groups || [];
   const activeCount = items.filter((i) => i.state === "on").length;
   const visibleItems = selectedRoom === "All" ? items : items.filter((i) => i.room === selectedRoom);
+  const visibleGroups = selectedRoom === "All" ? groups : groups.filter((group) => group.room === selectedRoom);
 
   container.innerHTML = `
     <div class="space-y-5">
@@ -199,6 +230,10 @@ export function renderControlsView(container, { openQuickFind, openAlerts, openM
             `
                 : ""
             }
+            <button id="addGroupBtn" type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded bg-surface-container-high border border-outline text-xs font-medium text-on-surface hover:bg-surface-bright">
+              <span class="material-symbols-outlined text-[15px]">device_hub</span>
+              <span>Group</span>
+            </button>
             <button id="addRoomBtn" type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded bg-surface-container-high border border-outline text-xs font-medium text-on-surface hover:bg-surface-bright">
               <span class="material-symbols-outlined text-[15px]">add</span>
               <span>Room</span>
@@ -209,6 +244,18 @@ export function renderControlsView(container, { openQuickFind, openAlerts, openM
             </button>
           </div>
         </section>
+
+        ${
+          visibleGroups.length
+            ? `<section class="dock-surface-card rounded-lg px-4 sm:px-5" aria-labelledby="deviceGroupsTitle">
+                <div class="py-3 border-b border-outline flex items-center justify-between gap-3">
+                  <h2 id="deviceGroupsTitle" class="font-headline text-[15px] font-semibold text-on-surface">Device groups</h2>
+                  <span class="text-xs text-on-surface-variant">Control related devices together</span>
+                </div>
+                ${visibleGroups.map((group) => renderGroupRow(group, items)).join("")}
+              </section>`
+            : ""
+        }
 
         <!-- Device Grid -->
         <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
@@ -280,6 +327,18 @@ export function renderControlsView(container, { openQuickFind, openAlerts, openM
     });
   });
 
+  container.querySelectorAll("[data-group-action]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const action = btn.getAttribute("data-group-action");
+      try {
+        await commandHomeGroup(btn.getAttribute("data-group-id"), action);
+        showToast(`Group ${action === "turn_on" ? "turned on" : "turned off"}`, "ok");
+      } catch (err) {
+        showToast(err.message || "Could not control the group", "error");
+      }
+    });
+  });
+
   container.querySelectorAll("[data-device-brightness]").forEach((slider) => {
     slider.addEventListener("change", async () => {
       const id = slider.getAttribute("data-device-brightness");
@@ -309,6 +368,91 @@ export function renderControlsView(container, { openQuickFind, openAlerts, openM
       } catch (err) {
         showToast(err.message || "Could not remove device", "error");
       }
+    });
+  });
+
+  container.querySelectorAll("[data-edit-device]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const item = items.find((value) => value.id === btn.getAttribute("data-edit-device"));
+      if (!item) return;
+      openModal({
+        title: "Edit Device",
+        submitLabel: "Save Device",
+        bodyHtml: `
+          <div class="space-y-3">
+            <div>
+              <label for="editDevName" class="block text-xs font-medium text-on-surface-variant mb-1">Device name</label>
+              <input id="editDevName" name="name" type="text" required maxlength="80" value="${escapeHtml(item.name)}" class="w-full px-3 py-2 rounded bg-surface-container-lowest border border-outline text-base text-on-surface focus:border-primary-container focus:outline-none" />
+            </div>
+            <div>
+              <label for="editDevRoom" class="block text-xs font-medium text-on-surface-variant mb-1">Room</label>
+              <select id="editDevRoom" name="room" required class="w-full px-3 py-2 rounded bg-surface-container-lowest border border-outline text-base text-on-surface focus:border-primary-container focus:outline-none">
+                ${rooms.map((room) => `<option value="${escapeHtml(room)}" ${room === item.room ? "selected" : ""}>${escapeHtml(room)}</option>`).join("")}
+              </select>
+            </div>
+          </div>`,
+        onSubmit: async (formData) => {
+          await updateHomeEntity(item.id, { name: formData.get("name"), room: formData.get("room") });
+          showToast("Device updated", "ok");
+        },
+      });
+    });
+  });
+
+  const openGroupEditor = (group = null) => {
+    const room = group?.room || (selectedRoom === "All" ? rooms[0] : selectedRoom);
+    if (!room) {
+      showToast("Add a room before creating a group", "error");
+      return;
+    }
+    const controllable = items.filter((item) => item.room === room && !item.read_only && ["light", "switch"].includes(item.type));
+    openModal({
+      title: group ? "Edit Device Group" : `Create Group in ${room}`,
+      submitLabel: group ? "Save Group" : "Create Group",
+      bodyHtml: `
+        <div class="space-y-4">
+          <div>
+            <label for="groupName" class="block text-xs font-medium text-on-surface-variant mb-1">Group name</label>
+            <input id="groupName" name="name" type="text" required maxlength="80" value="${escapeHtml(group?.name || "")}" placeholder="e.g. Entertainment center" class="w-full px-3 py-2 rounded bg-surface-container-lowest border border-outline text-base text-on-surface focus:border-primary-container focus:outline-none" />
+            <input name="room" type="hidden" value="${escapeHtml(room)}" />
+          </div>
+          <fieldset>
+            <legend class="text-xs font-medium text-on-surface-variant mb-2">Devices in ${escapeHtml(room)}</legend>
+            <div class="space-y-2 max-h-56 overflow-y-auto">
+              ${controllable.length ? controllable.map((item) => `
+                <label class="flex items-center gap-3 px-3 py-2.5 rounded bg-surface-container-lowest border border-outline cursor-pointer hover:border-outline-strong">
+                  <input type="checkbox" name="entity_ids" value="${escapeHtml(item.id)}" ${group?.entity_ids?.includes(item.id) ? "checked" : ""} class="w-4 h-4 accent-primary-container" />
+                  <span class="text-sm text-on-surface">${escapeHtml(item.name)}</span>
+                </label>`).join("") : `<p class="text-sm text-on-surface-variant">There are no controllable devices in this room yet.</p>`}
+            </div>
+          </fieldset>
+          ${group ? `<button id="deleteGroupBtn" type="button" class="text-xs font-medium text-danger hover:underline">Delete this group</button>` : ""}
+        </div>`,
+      onSubmit: async (formData) => {
+        await saveHomeGroup({
+          name: formData.get("name"),
+          room: formData.get("room"),
+          entity_ids: formData.getAll("entity_ids"),
+        }, group?.id || null);
+        showToast(group ? "Group updated" : "Group created", "ok");
+      },
+    });
+    document.querySelector("#deleteGroupBtn")?.addEventListener("click", async () => {
+      try {
+        await deleteHomeGroup(group.id);
+        document.querySelector("#actionModal")?.close();
+        showToast("Group deleted", "ok");
+      } catch (err) {
+        showToast(err.message || "Could not delete group", "error");
+      }
+    });
+  };
+
+  container.querySelector("#addGroupBtn")?.addEventListener("click", () => openGroupEditor());
+  container.querySelectorAll("[data-edit-group]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const group = groups.find((value) => value.id === btn.getAttribute("data-edit-group"));
+      if (group) openGroupEditor(group);
     });
   });
 

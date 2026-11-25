@@ -58,6 +58,9 @@ Run only one instance per host unless you change the default port mappings.
 - Devices: edit ignored `alerts/config.local.yaml` using the example beside it.
   For Home Assistant, set URL/token in `.env`, then add entities in Home → Controls.
   Rename and group devices in the UI. Restart home after configuration changes.
+- Automations: open Automations to schedule a device, room, or device group by
+  local time and day. Rules are stored in ignored `data/home/automations.json` and
+  run from the native home bridge, so the dashboard page does not need to stay open.
 - Floor plan: open `/home/floorplan` → Edit layout. Add rooms, furniture and sockets
   to the empty model. Changes stay in ignored `data/home/diorama.json`.
 - Widgets: Customize edits cities, clocks, favorites and stock symbols. Drag the

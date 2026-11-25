@@ -2,7 +2,7 @@
 	encode zstd gzip
 
 	route {
-		@home path /api/home/* /api/media /api/media/* /api/config /api/config/*
+		@home path /api/home/* /api/media /api/media/* /api/config /api/config/* /api/automations /api/automations/*
 		reverse_proxy @home 127.0.0.1:8090
 
 		@alerts path /api/events /api/events/* /api/health /api/health/* /api/snapshots/*
