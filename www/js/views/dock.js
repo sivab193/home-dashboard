@@ -1,10 +1,13 @@
-import { controlMedia, escapeHtml, showToast, store } from "../api.js";
+import { controlMedia, escapeHtml, fToC, showToast, store } from "../api.js";
 
 let clockTimer = null;
+const WEST_LAFAYETTE_TIME_ZONE = "America/Indiana/Indianapolis";
+const HOSUR_TIME_ZONE = "Asia/Kolkata";
 
-function formatDockTime(date) {
+function formatDockTime(date, timeZone) {
   const hour12 = store.config.clockFormat !== "24-hour";
   const parts = new Intl.DateTimeFormat(undefined, {
+    timeZone,
     hour: "2-digit",
     minute: "2-digit",
     hour12,
@@ -20,17 +23,26 @@ function formatDockTime(date) {
 
 function updateDockClock() {
   const now = new Date();
-  const { time, period } = formatDockTime(now);
+  const primary = formatDockTime(now, WEST_LAFAYETTE_TIME_ZONE);
+  const hosur = formatDockTime(now, HOSUR_TIME_ZONE);
   const timeEl = document.getElementById("dockClockTime");
   const periodEl = document.getElementById("dockClockPeriod");
+  const hosurTimeEl = document.getElementById("dockHosurTime");
+  const hosurPeriodEl = document.getElementById("dockHosurPeriod");
   const dateEl = document.getElementById("dockClockDate");
   if (timeEl) {
-    timeEl.textContent = time;
+    timeEl.textContent = primary.time;
     timeEl.dateTime = now.toISOString();
   }
-  if (periodEl) periodEl.textContent = period;
+  if (periodEl) periodEl.textContent = primary.period;
+  if (hosurTimeEl) {
+    hosurTimeEl.textContent = hosur.time;
+    hosurTimeEl.dateTime = now.toISOString();
+  }
+  if (hosurPeriodEl) hosurPeriodEl.textContent = hosur.period;
   if (dateEl) {
     dateEl.textContent = new Intl.DateTimeFormat(undefined, {
+      timeZone: WEST_LAFAYETTE_TIME_ZONE,
       weekday: "long",
       month: "long",
       day: "numeric",
@@ -49,8 +61,14 @@ export function renderDockScreen(container, { navigate, toggleFullscreen }) {
   const controllable = devices.filter((item) => !item.read_only);
   const activeDevices = controllable.filter((item) => item.state === "on");
   const weather = store.weather;
+  const tempC = weather?.tempC ?? (typeof weather?.tempF === "number" ? fToC(weather.tempF) : "--");
+  const primaryWeekday = new Intl.DateTimeFormat("en-US", {
+    timeZone: WEST_LAFAYETTE_TIME_ZONE,
+    weekday: "short",
+  }).format(new Date());
+  const weekdayIndex = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(primaryWeekday);
   const events = (store.schedule || [])
-    .filter((event) => event.dayOffset === new Date().getDay() || event.dayOffset === 0)
+    .filter((event) => event.dayOffset === weekdayIndex || event.dayOffset === 0)
     .slice(0, 3);
   const media = store.media;
   const isPlaying = Boolean(media?.playing && media?.track?.title);
@@ -73,19 +91,31 @@ export function renderDockScreen(container, { navigate, toggleFullscreen }) {
       <div class="dock-screen-stage">
         <div class="dock-clock-block">
           <p id="dockClockDate" class="dock-clock-date"></p>
-          <div class="flex items-end gap-4 sm:gap-6">
-            <time id="dockClockTime" class="dock-clock-time tabular-nums"></time>
-            <span id="dockClockPeriod" class="dock-clock-period"></span>
+          <div class="dock-clock-pair">
+            <section class="dock-clock-city" aria-labelledby="dockWestLafayetteLabel">
+              <h2 id="dockWestLafayetteLabel" class="dock-city-label">West Lafayette</h2>
+              <div class="flex items-end gap-3">
+                <time id="dockClockTime" class="dock-clock-time tabular-nums"></time>
+                <span id="dockClockPeriod" class="dock-clock-period"></span>
+              </div>
+            </section>
+            <section class="dock-clock-city dock-clock-secondary" aria-labelledby="dockHosurLabel">
+              <h2 id="dockHosurLabel" class="dock-city-label">Hosur</h2>
+              <div class="flex items-end gap-3">
+                <time id="dockHosurTime" class="dock-clock-time dock-clock-time-secondary tabular-nums"></time>
+                <span id="dockHosurPeriod" class="dock-clock-period dock-clock-period-secondary"></span>
+              </div>
+            </section>
           </div>
-          <p class="dock-clock-location">${escapeHtml(weather?.city || store.config.weatherCity)}</p>
+          <p class="dock-clock-location">Indiana · Eastern Time <span aria-hidden="true">/</span> Tamil Nadu · IST</p>
         </div>
 
         <div class="dock-glance-panel">
           <section class="dock-glance-row" aria-labelledby="dockWeatherTitle">
             <div>
               <h2 id="dockWeatherTitle" class="dock-glance-label">Weather</h2>
-              <p class="dock-glance-value">${escapeHtml(weather?.tempF ?? "--")}°</p>
-              <p class="dock-glance-detail">${escapeHtml(weather?.condition || "Weather unavailable")}</p>
+              <p class="dock-glance-value">${escapeHtml(tempC)}°C</p>
+              <p class="dock-glance-detail">${escapeHtml(weather?.condition || "Weather unavailable")} · ${escapeHtml(weather?.city || store.config.weatherCity)}</p>
             </div>
             <span class="material-symbols-outlined dock-weather-icon" aria-hidden="true">${escapeHtml(weather?.icon || "partly_cloudy_day")}</span>
           </section>

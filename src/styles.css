@@ -185,13 +185,39 @@ body.dock-screen-active #appMain {
   font-weight: 500;
 }
 
+.dock-clock-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  align-items: end;
+  gap: clamp(24px, 4vw, 64px);
+}
+
+.dock-city-label {
+  margin-bottom: 14px;
+  color: #a8abb0;
+  font-size: clamp(0.75rem, 1vw, 0.9rem);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dock-clock-secondary {
+  padding-left: clamp(24px, 4vw, 64px);
+  border-left: 1px solid #32353a;
+}
+
 .dock-clock-time {
   color: #e2e2e5;
   font-family: var(--font-headline);
-  font-size: clamp(5rem, 15vw, 13rem);
+  font-size: clamp(4.5rem, 10vw, 9.5rem);
   font-weight: 600;
   line-height: 0.88;
   letter-spacing: -0.04em;
+}
+
+.dock-clock-time-secondary {
+  font-size: clamp(3.25rem, 6.5vw, 6.5rem);
+  color: #c3c7cc;
 }
 
 .dock-clock-period {
@@ -200,6 +226,11 @@ body.dock-screen-active #appMain {
   font-family: var(--font-mono);
   font-size: clamp(0.9rem, 1.5vw, 1.35rem);
   font-weight: 600;
+}
+
+.dock-clock-period-secondary {
+  margin-bottom: clamp(5px, 1.5vw, 18px);
+  color: #82d8a6;
 }
 
 .dock-clock-location {
@@ -346,7 +377,26 @@ body.dock-screen-active #appMain {
   }
 
   .dock-clock-time {
-    font-size: clamp(4.5rem, 25vw, 8rem);
+    font-size: clamp(3.1rem, 15vw, 5.5rem);
+  }
+
+  .dock-clock-pair {
+    grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
+    gap: 12px;
+  }
+
+  .dock-clock-secondary {
+    padding-left: 12px;
+  }
+
+  .dock-clock-time-secondary {
+    font-size: clamp(2.6rem, 12vw, 4.5rem);
+  }
+
+  .dock-clock-period,
+  .dock-clock-period-secondary {
+    margin-bottom: 6px;
+    font-size: 0.6875rem;
   }
 
   .dock-glance-row {
