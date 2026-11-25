@@ -21,9 +21,11 @@ import { renderControlsView, setControlsSubTab } from "./views/controls.js";
 import { renderSecurityView } from "./views/security.js";
 import { renderConfigureWidgetView } from "./views/configure-widget.js";
 import { renderConfigView } from "./views/config.js";
+import { renderDockScreen, stopDockScreen } from "./views/dock.js";
 
 const ROUTES = [
   { path: "/", label: "Home", icon: "home", keywords: "dashboard overview kpi shift lighting" },
+  { path: "/dock", label: "Dock Screen", icon: "desktop_windows", keywords: "clock fullscreen ambient display status" },
   { path: "/media", label: "Media", icon: "play_circle", keywords: "audio music airpods speakers queue" },
   { path: "/weather", label: "Weather", icon: "partly_cloudy_day", keywords: "forecast radar humidity wind aqi" },
   { path: "/schedule", label: "Schedule", icon: "calendar_today", keywords: "calendar shift timeline events" },
@@ -56,6 +58,31 @@ function updateNavActive(route) {
     link.classList.toggle("hover:text-on-surface", !isActive);
     if (isActive) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
+  });
+}
+
+async function toggleFullscreen() {
+  try {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+    } else if (document.fullscreenEnabled) {
+      await document.documentElement.requestFullscreen();
+    } else {
+      showToast("Full screen is not available in this browser", "error");
+    }
+  } catch (err) {
+    showToast(err.message || "Could not change full screen mode", "error");
+  }
+}
+
+function updateFullscreenControls() {
+  const active = Boolean(document.fullscreenElement);
+  document.querySelectorAll("#topFullscreenBtn, #dockFullscreenBtn").forEach((button) => {
+    const icon = button.querySelector(".material-symbols-outlined");
+    const label = button.querySelector("span:last-child");
+    button.setAttribute("aria-label", active ? "Exit full screen" : "Enter full screen");
+    if (icon) icon.textContent = active ? "fullscreen_exit" : "fullscreen";
+    if (button.id === "dockFullscreenBtn" && label) label.textContent = active ? "Exit full screen" : "Full screen";
   });
 }
 
@@ -299,10 +326,13 @@ function renderCurrentRoute() {
   const main = document.getElementById("appMain");
   if (!main) return;
   const route = store.route;
+  stopDockScreen();
+  document.body.classList.toggle("dock-screen-active", route === "/dock");
   updateNavActive(route);
   renderAlertsDrawer();
 
   if (route === "/") renderHomeView(main, viewCtx);
+  else if (route === "/dock") renderDockScreen(main, { navigate, toggleFullscreen });
   else if (route === "/media") renderMediaView(main, viewCtx);
   else if (route === "/weather") renderWeatherView(main, viewCtx);
   else if (route === "/schedule") renderScheduleView(main, viewCtx);
@@ -317,6 +347,7 @@ function renderCurrentRoute() {
   else if (route === "/configure-widget") renderConfigureWidgetView(main, viewCtx);
   else if (route === "/config") renderConfigView(main, viewCtx);
   else renderHomeView(main, viewCtx);
+  updateFullscreenControls();
 }
 
 export function navigate(path, push = true) {
@@ -354,6 +385,9 @@ async function init() {
   document.getElementById("topQuickFindBtn")?.addEventListener("click", openQuickFind);
   document.getElementById("topAlertsBtn")?.addEventListener("click", openAlerts);
   document.getElementById("topProfileBtn")?.addEventListener("click", () => navigate("/config"));
+  document.getElementById("topFullscreenBtn")?.addEventListener("click", toggleFullscreen);
+  document.addEventListener("fullscreenchange", updateFullscreenControls);
+  updateFullscreenControls();
 
   // Quick Find listeners
   const qfDialog = document.getElementById("quickFindDialog");

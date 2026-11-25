@@ -97,6 +97,271 @@ body {
   border-right: 1px solid #26292e;
 }
 
+/* Ambient dock screen */
+body.dock-screen-active {
+  overflow: hidden;
+}
+
+body.dock-screen-active #sidebar,
+body.dock-screen-active #mobileBackdrop,
+body.dock-screen-active header.sticky {
+  display: none;
+}
+
+body.dock-screen-active .lg\:pl-64 {
+  padding-left: 0 !important;
+}
+
+body.dock-screen-active #appMain {
+  width: 100%;
+  max-width: none;
+  padding: 0;
+}
+
+.dock-screen {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: clamp(20px, 3.5vw, 56px);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: clamp(28px, 5vh, 72px);
+  background: #0c0e10;
+}
+
+.dock-screen-toolbar,
+.dock-screen-footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.dock-screen-brand {
+  font-family: var(--font-headline);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #e2e2e5;
+}
+
+.dock-screen-action {
+  min-height: 44px;
+  padding: 10px 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #32353a;
+  border-radius: 8px;
+  color: #c3c7cc;
+  background: #1a1c1e;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease;
+}
+
+.dock-screen-action:hover,
+.dock-screen-action:focus-visible {
+  color: #e2e2e5;
+  background: #282a2c;
+  border-color: #454950;
+}
+
+.dock-screen-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(300px, 0.75fr);
+  align-items: center;
+  gap: clamp(48px, 8vw, 128px);
+}
+
+.dock-clock-date,
+.dock-clock-location {
+  color: #a8abb0;
+  font-size: clamp(1rem, 1.4vw, 1.35rem);
+}
+
+.dock-clock-date {
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.dock-clock-time {
+  color: #e2e2e5;
+  font-family: var(--font-headline);
+  font-size: clamp(5rem, 15vw, 13rem);
+  font-weight: 600;
+  line-height: 0.88;
+  letter-spacing: -0.04em;
+}
+
+.dock-clock-period {
+  margin-bottom: clamp(8px, 2vw, 28px);
+  color: #ff6370;
+  font-family: var(--font-mono);
+  font-size: clamp(0.9rem, 1.5vw, 1.35rem);
+  font-weight: 600;
+}
+
+.dock-clock-location {
+  margin-top: 20px;
+}
+
+.dock-glance-panel {
+  border-top: 1px solid #32353a;
+}
+
+.dock-glance-row {
+  min-height: 132px;
+  padding: 24px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 1px solid #32353a;
+}
+
+.dock-glance-label {
+  margin-bottom: 8px;
+  color: #a8abb0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dock-glance-value {
+  color: #e2e2e5;
+  font-family: var(--font-headline);
+  font-size: clamp(2.25rem, 4vw, 4.5rem);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+
+.dock-glance-unit {
+  color: #a8abb0;
+  font-size: 0.45em;
+  letter-spacing: 0;
+}
+
+.dock-glance-detail,
+.dock-event-empty {
+  margin-top: 8px;
+  color: #a8abb0;
+  font-size: 0.875rem;
+}
+
+.dock-weather-icon,
+.dock-glance-icon {
+  color: #ff6370;
+  font-size: clamp(2rem, 3.5vw, 3.5rem);
+}
+
+.dock-glance-icon {
+  color: #82d8a6;
+}
+
+.dock-media-title {
+  max-width: 20ch;
+  overflow: hidden;
+  color: #e2e2e5;
+  font-family: var(--font-headline);
+  font-size: clamp(1.3rem, 2vw, 2rem);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dock-media-controls {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dock-media-controls button {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #32353a;
+  border-radius: 8px;
+  color: #c3c7cc;
+  background: #1a1c1e;
+  transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease;
+}
+
+.dock-media-controls button:hover,
+.dock-media-controls button:focus-visible {
+  color: #0c0e10;
+  background: #82d8a6;
+  border-color: #82d8a6;
+}
+
+.dock-screen-footer {
+  align-items: flex-end;
+  padding-top: 24px;
+  border-top: 1px solid #32353a;
+}
+
+.dock-event-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 28px;
+}
+
+.dock-event-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.dock-event-time {
+  color: #ff6370;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.dock-event-title {
+  color: #e2e2e5;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.dock-screen-hint {
+  color: #777b82;
+  font-size: 0.75rem;
+}
+
+@media (max-width: 800px) {
+  .dock-screen {
+    overflow-y: auto;
+  }
+
+  .dock-screen-stage {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: 48px;
+  }
+
+  .dock-clock-time {
+    font-size: clamp(4.5rem, 25vw, 8rem);
+  }
+
+  .dock-glance-row {
+    min-height: 112px;
+  }
+
+  .dock-screen-footer {
+    align-items: flex-start;
+  }
+
+  .dock-screen-hint {
+    display: none;
+  }
+}
+
 /* Hairline range sliders */
 input[type="range"].dock-slider {
   -webkit-appearance: none;

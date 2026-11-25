@@ -42,6 +42,11 @@ Open http://localhost:1984/dashboard. On a phone on the same LAN, replace
 localhost with the server address. This app has no user authentication; keep
 it on a trusted LAN rather than exposing it to the public internet.
 
+Open `/dock` for the glanceable clock screen. Its Full screen button uses the
+browser's native full-screen mode, and its media buttons control playback on
+the Mac running the home bridge. A tablet can use the same controls by opening
+the Mac's dashboard address on the local network.
+
 ```sh
 ./stack.sh stop dashboard home
 ./stack.sh status

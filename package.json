@@ -9,7 +9,7 @@
     "start": "node server.ts",
     "build:css": "tailwindcss -i src/styles.css -o www/app.css --minify",
     "build": "npm run build:css && tsc --noEmit",
-    "lint": "tsc --noEmit && node --check www/js/app.js && node --check www/js/api.js && node --check www/js/views/home.js && node --check www/js/views/media.js && node --check www/js/views/weather.js && node --check www/js/views/schedule.js && node --check www/js/views/automations.js && node --check www/js/views/controls.js && node --check www/js/views/security.js && node --check www/js/views/configure-widget.js && node --check www/js/views/config.js",
+    "lint": "tsc --noEmit && node --check www/js/app.js && node --check www/js/api.js && node --check www/js/views/home.js && node --check www/js/views/dock.js && node --check www/js/views/media.js && node --check www/js/views/weather.js && node --check www/js/views/schedule.js && node --check www/js/views/automations.js && node --check www/js/views/controls.js && node --check www/js/views/security.js && node --check www/js/views/configure-widget.js && node --check www/js/views/config.js",
     "android:add": "cap add android",
     "android:sync": "cap sync android",
     "android:open": "cap open android"

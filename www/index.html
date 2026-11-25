@@ -48,6 +48,10 @@
           <span class="material-symbols-outlined text-[20px]">home</span>
           <span>Home</span>
         </a>
+        <a href="/dock" data-nav="/dock" class="nav-link flex items-center gap-3 px-3 py-2 rounded-md text-[13px] font-medium transition-colors">
+          <span class="material-symbols-outlined text-[20px]">desktop_windows</span>
+          <span>Dock Screen</span>
+        </a>
         <a href="/media" data-nav="/media" class="nav-link flex items-center gap-3 px-3 py-2 rounded-md text-[13px] font-medium transition-colors">
           <span class="material-symbols-outlined text-[20px]">play_circle</span>
           <span>Media</span>
@@ -104,6 +108,9 @@
       </div>
 
       <div class="flex items-center gap-2 shrink-0">
+        <button id="topFullscreenBtn" type="button" class="p-2 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" aria-label="Enter full screen">
+          <span class="material-symbols-outlined text-[20px]">fullscreen</span>
+        </button>
         <button id="topQuickFindBtn" type="button" class="p-2 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" aria-label="Quick Find (Command K)" title="Quick Find (⌘K)">
           <span class="material-symbols-outlined text-[20px]">search</span>
         </button>
