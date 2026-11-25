@@ -12,6 +12,7 @@ dependencies = [
     "uvicorn>=0.32",
     "ultralytics>=8.4.96",
     "recurring-ical-events>=3.5",
+    "cryptography>=42",
 ]
 
 [tool.uv]

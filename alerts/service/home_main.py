@@ -13,6 +13,7 @@ from .music import MusicReactive
 from .mac_bridge import MacBridge
 from .settings import load_config
 from .smarteefi import SmarteefiProvider
+from .tuya import TuyaProvider
 
 
 class _NoCameraBus:
@@ -35,8 +36,9 @@ def main():
     data_dir.mkdir(parents=True, exist_ok=True)
     cfg = load_config(config_dir)
     smarteefi = SmarteefiProvider(cfg.get("smarteefi", {}))
+    tuya = TuyaProvider(cfg.get("tuya", {}))
     home = HomeAssistant(cfg.get("home_assistant", {}), data_dir / "home-layout.json",
-                         providers=[smarteefi])
+                         providers=[smarteefi, tuya])
     music = MusicReactive(home, cfg.get("music_reactive", {}))
     calendar = CalendarFeed.from_env(data_dir / "calendar-feed.json")
     calendar.start()

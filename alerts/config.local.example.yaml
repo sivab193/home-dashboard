@@ -20,3 +20,16 @@ smarteefi:
         3: {name: Outlet 3, icon: "🔌"}
         4: {name: Outlet 4, icon: "🔌"}
         5: {name: Outlet 5, icon: "🔌"}
+
+# Optional direct local Tuya v3.5 devices (e.g. Wipro 10A Smart Plug on port 6668)
+# tuya:
+#   timeout: 3
+#   devices:
+#     - id: wipro_smart_plug
+#       name: Wipro Smart Plug
+#       room: Living room
+#       icon: "🔌"
+#       device_id: replace_me
+#       local_key: replace_me
+#       ip: 192.168.1.51
+#       version: "3.5"

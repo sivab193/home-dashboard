@@ -11,6 +11,7 @@ from .events import EventBus
 from .health import HealthMonitor
 from .home import HomeAssistant
 from .smarteefi import SmarteefiProvider
+from .tuya import TuyaProvider
 from .music import MusicReactive
 from .home_notify import HomeAssistantNotifier
 from .notify import TelegramNotifier
@@ -49,8 +50,9 @@ def main():
 
     home_enabled = os.environ.get("ALERTS_HOME_ENABLED", "1") != "0"
     smarteefi = SmarteefiProvider(cfg.get("smarteefi", {})) if home_enabled else None
+    tuya = TuyaProvider(cfg.get("tuya", {})) if home_enabled else None
     home = HomeAssistant(cfg.get("home_assistant", {}), DATA / "home-layout.json",
-                         providers=[smarteefi] if smarteefi else []) if home_enabled else None
+                         providers=[p for p in (smarteefi, tuya) if p]) if home_enabled else None
     music = MusicReactive(home, cfg.get("music_reactive", {})) if home else None
     notifier = TelegramNotifier(cfg.get("telegram", {}).get("mute_kinds", ()))
     notifiers = [notifier]
