@@ -8,19 +8,17 @@ ALL=(dashboard home homeassistant)
 HOST_HOME=false
 if [ "$(uname -s)" = "Darwin" ]; then HOST_HOME=true; fi
 
-# Docker remains the default so installing Podman cannot accidentally start a
-# second copy of the stack beside a running Docker deployment. Select Podman
-# explicitly during the planned cutover with CONTAINER_ENGINE=podman.
+# The dashboard and home bridge run natively on macOS. Docker is loaded lazily
+# only for Home Assistant, CCTV, or camera alerts.
 CONTAINER_ENGINE="${CONTAINER_ENGINE:-docker}"
-case "$CONTAINER_ENGINE" in
-  docker|podman) ;;
-  *) echo "CONTAINER_ENGINE must be either docker or podman" >&2; exit 2 ;;
-esac
-if ! command -v "$CONTAINER_ENGINE" >/dev/null 2>&1; then
-  echo "$CONTAINER_ENGINE is not installed or is not on PATH" >&2
-  exit 1
-fi
-COMPOSE=("$CONTAINER_ENGINE" compose)
+
+compose() {
+  if ! command -v "$CONTAINER_ENGINE" >/dev/null 2>&1; then
+    echo "$CONTAINER_ENGINE is required for container services" >&2
+    return 1
+  fi
+  "$CONTAINER_ENGINE" compose "$@"
+}
 
 usage() {
   cat <<'EOF'
@@ -34,8 +32,8 @@ Usage:
 
 Services: dashboard home homeassistant cctv alerts all
 
-Container engine: Docker by default. Set CONTAINER_ENGINE=podman to use
-Podman Compose after its machine and Compose provider have been configured.
+On macOS, dashboard and home are native services. Docker is needed only for
+homeassistant, cctv, and alerts.
 
 `all` starts dashboard, home, and Home Assistant. Start `cctv` and `alerts`
 explicitly only on the machine assigned to camera processing.
@@ -55,9 +53,58 @@ prepare() {
 
 home_log_file="data/home/home.log"
 home_launch_label="com.home-dashboard.home"
+dashboard_log_file="data/dashboard/dashboard.log"
+dashboard_launch_label="com.home-dashboard.dashboard"
+
+dashboard_loaded() {
+  launchctl print "gui/$(id -u)/$dashboard_launch_label" >/dev/null 2>&1
+}
+
+dashboard_running() {
+  dashboard_loaded && curl -fsS http://127.0.0.1:1984/ >/dev/null 2>&1
+}
+
+start_host_dashboard() {
+  if dashboard_running; then
+    echo "Dashboard already running."
+    return
+  fi
+  mkdir -p data/dashboard
+  launchctl remove "$dashboard_launch_label" >/dev/null 2>&1 || true
+  launchctl submit -l "$dashboard_launch_label" -o /dev/null -e /dev/null -- \
+    "$PWD/scripts/run-dashboard-host.sh"
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    if curl -fsS http://127.0.0.1:1984/ >/dev/null 2>&1; then
+      echo "Dashboard started."
+      return
+    fi
+    sleep 1
+  done
+  echo "Dashboard did not become ready; see $dashboard_log_file" >&2
+  return 1
+}
+
+stop_host_dashboard() {
+  if ! dashboard_loaded; then
+    echo "Dashboard is not running."
+    return
+  fi
+  launchctl remove "$dashboard_launch_label"
+  for _ in 1 2 3 4 5; do
+    if ! dashboard_loaded && ! curl -fsS http://127.0.0.1:1984/ >/dev/null 2>&1; then
+      break
+    fi
+    sleep 1
+  done
+  echo "Dashboard stopped."
+}
+
+home_loaded() {
+  launchctl print "gui/$(id -u)/$home_launch_label" >/dev/null 2>&1
+}
 
 home_running() {
-  launchctl print "gui/$(id -u)/$home_launch_label" >/dev/null 2>&1
+  home_loaded && curl -fsS http://127.0.0.1:8090/api/home/config >/dev/null 2>&1
 }
 
 start_host_home() {
@@ -99,11 +146,17 @@ start_host_home() {
 }
 
 stop_host_home() {
-  if ! home_running; then
+  if ! home_loaded; then
     echo "Home bridge is not running."
     return
   fi
   launchctl remove "$home_launch_label"
+  for _ in 1 2 3 4 5; do
+    if ! home_loaded && ! curl -fsS http://127.0.0.1:8090/api/home/config >/dev/null 2>&1; then
+      break
+    fi
+    sleep 1
+  done
   echo "Home bridge stopped."
 }
 
@@ -128,55 +181,71 @@ else
   selected=($(services "$@"))
 fi
 
-docker_selected=()
+container_selected=()
 home_selected=false
+dashboard_selected=false
 for service in "${selected[@]}"; do
-  if $HOST_HOME && [ "$service" = "home" ]; then
+  if $HOST_HOME && [ "$service" = "dashboard" ]; then
+    dashboard_selected=true
+  elif $HOST_HOME && [ "$service" = "home" ]; then
     home_selected=true
   else
-    docker_selected+=("$service")
+    container_selected+=("$service")
   fi
 done
 
 case "$command" in
   start)
     prepare
-    if [ "${#docker_selected[@]}" -gt 0 ]; then
-      "${COMPOSE[@]}" up -d --build "${docker_selected[@]}"
+    if [ "${#container_selected[@]}" -gt 0 ]; then
+      compose up -d --build "${container_selected[@]}"
     fi
+    if $dashboard_selected; then start_host_dashboard; fi
     if $home_selected; then
-      "${COMPOSE[@]}" rm -sf home >/dev/null 2>&1 || true
       start_host_home
     fi
     ;;
   stop)
-    if [ "${#docker_selected[@]}" -gt 0 ]; then "${COMPOSE[@]}" stop "${docker_selected[@]}"; fi
+    if [ "${#container_selected[@]}" -gt 0 ]; then compose stop "${container_selected[@]}"; fi
+    if $dashboard_selected; then stop_host_dashboard; fi
     if $home_selected; then stop_host_home; fi
     ;;
   restart)
     prepare
-    if [ "${#docker_selected[@]}" -gt 0 ]; then
-      "${COMPOSE[@]}" up -d --build --force-recreate "${docker_selected[@]}"
+    if [ "${#container_selected[@]}" -gt 0 ]; then
+      compose up -d --build --force-recreate "${container_selected[@]}"
     fi
+    if $dashboard_selected; then stop_host_dashboard; start_host_dashboard; fi
     if $home_selected; then
       stop_host_home
-      "${COMPOSE[@]}" rm -sf home >/dev/null 2>&1 || true
       start_host_home
     fi
     ;;
   logs)
-    if $home_selected && [ "${#docker_selected[@]}" -eq 0 ]; then
+    if $dashboard_selected && ! $home_selected && [ "${#container_selected[@]}" -eq 0 ]; then
+      tail -n 100 -f "$dashboard_log_file"
+    elif $home_selected && ! $dashboard_selected && [ "${#container_selected[@]}" -eq 0 ]; then
       tail -n 100 -f "$home_log_file"
-    elif $home_selected; then
-      tail -n 100 "$home_log_file"
+    elif $dashboard_selected || $home_selected; then
+      if $dashboard_selected; then tail -n 100 "$dashboard_log_file"; fi
+      if $home_selected; then tail -n 100 "$home_log_file"; fi
     fi
-    if [ "${#docker_selected[@]}" -gt 0 ]; then
-      "${COMPOSE[@]}" logs -f --tail=100 "${docker_selected[@]}"
+    if [ "${#container_selected[@]}" -gt 0 ]; then
+      compose logs -f --tail=100 "${container_selected[@]}"
     fi
     ;;
   status)
-    "${COMPOSE[@]}" ps -a
+    if command -v "$CONTAINER_ENGINE" >/dev/null 2>&1 && "$CONTAINER_ENGINE" info >/dev/null 2>&1; then
+      compose ps -a
+    else
+      echo "container engine: stopped"
+    fi
     if $HOST_HOME; then
+      if dashboard_running; then
+        echo "dashboard (host Caddy): running"
+      else
+        echo "dashboard (host Caddy): stopped"
+      fi
       if home_running; then
         echo "home (host bridge): running"
       else
@@ -185,8 +254,13 @@ case "$command" in
     fi
     ;;
   down)
-    if $HOST_HOME; then stop_host_home; fi
-    "${COMPOSE[@]}" down
+    if $HOST_HOME; then
+      stop_host_dashboard
+      stop_host_home
+    fi
+    if command -v "$CONTAINER_ENGINE" >/dev/null 2>&1 && "$CONTAINER_ENGINE" info >/dev/null 2>&1; then
+      compose down
+    fi
     ;;
   *) usage; exit 2 ;;
 esac

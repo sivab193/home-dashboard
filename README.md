@@ -6,9 +6,8 @@ No residence layout or device inventory is bundled. CCTV and alerts are optional
 
 ## Start
 
-Install Docker with Compose v2, or Podman with a Compose provider. macOS also
-needs Python 3.11+. Docker is the default container engine; select Podman by
-setting `CONTAINER_ENGINE=podman` on `stack.sh` commands.
+On macOS, install Caddy and Python 3.11+. The dashboard and home bridge run as
+small native services, so Docker is not required for the default start.
 
 ```sh
 git clone https://github.com/sivab193/home-dashboard.git
@@ -17,33 +16,27 @@ cp .env.example .env
 ./stack.sh start dashboard home
 ```
 
-### Podman on macOS
+### Native macOS services
 
-Podman runs Linux containers inside a Podman machine on macOS. Install Podman
-Desktop (recommended by the Podman project), create and start its machine, and
-set up Compose. Verify it before moving the live services:
+Start the dashboard and home bridge without a container VM:
 
 ```sh
-podman machine start
-podman info
-podman compose version
-CONTAINER_ENGINE=podman ./stack.sh status
+brew install caddy
+./stack.sh start dashboard home
 ```
 
-Keep Docker selected until the planned cutover; merely installing Podman will
-not change the active stack. During cutover, stop the Docker services, start the
-Podman machine, and start the same services with Podman:
+The dashboard is served by Caddy on port 1984 and proxies device APIs to the
+native Python bridge on port 8090. Both are managed by `launchd` and remain
+independent of Docker Desktop. Run `./stack.sh start` after logging in or after
+a Mac restart. Docker is loaded only when a container service is requested:
 
 ```sh
-./stack.sh stop dashboard homeassistant
-CONTAINER_ENGINE=podman ./stack.sh start dashboard homeassistant
-CONTAINER_ENGINE=podman ./stack.sh status
+./stack.sh start homeassistant
+./stack.sh status
 ```
 
-The macOS `home` bridge continues to run directly on the host, independent of
-either container engine. Podman supplies `host.docker.internal` through its
-machine networking, so the existing dashboard proxy configuration is shared by
-both engines.
+Home Assistant can later move to Home Assistant Green or another dedicated
+machine without changing the native dashboard or device bridge.
 
 Open http://localhost:1984/dashboard. On a phone on the same LAN, replace
 localhost with the server address. This app has no user authentication; keep
