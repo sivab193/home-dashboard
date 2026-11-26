@@ -138,6 +138,9 @@ export function renderHomeView(container, { navigate, openQuickFind, openAlerts,
       ? controllableDevices.filter((d) => configuredIds.includes(d.id))
       : controllableDevices;
   const activeDevices = controllableDevices.filter((d) => d.state === "on");
+  const mobileQuickDevices = controllableDevices.filter(
+    (d) => String(d.room || "").trim().toLowerCase() === "living room"
+  );
 
   const weather = store.weather;
   const tempF = weather ? weather.tempF : 64;
@@ -205,6 +208,47 @@ export function renderHomeView(container, { navigate, openQuickFind, openAlerts,
           </button>
         </div>
       </div>
+
+      ${
+        features.devices && mobileQuickDevices.length
+          ? `<!-- Mobile Top Quick Control (Living Room / Plug) -->
+      <section class="lg:hidden space-y-2" aria-label="Mobile quick controls">
+        ${mobileQuickDevices
+          .map((dev) => {
+            const isOn = dev.state === "on";
+            const watts =
+              typeof dev.attributes?.power === "number" && isOn
+                ? ` · ${dev.attributes.power.toFixed(1)}W`
+                : "";
+            return `
+            <div class="dock-surface-card rounded-lg px-4 py-3 flex items-center justify-between gap-3">
+              <div class="flex items-center gap-3 min-w-0">
+                <span class="w-9 h-9 rounded-md border flex items-center justify-center shrink-0 ${
+                  isOn
+                    ? "bg-primary-container border-primary-container text-on-primary-container"
+                    : "bg-surface-container-high border-outline text-on-surface-variant"
+                }">
+                  <span class="material-symbols-outlined text-[19px]">power</span>
+                </span>
+                <div class="min-w-0">
+                  <p class="text-sm font-semibold text-on-surface truncate">${escapeHtml(dev.name)}</p>
+                  <p class="font-mono text-[11px] text-on-surface-variant truncate">${escapeHtml(dev.room)} · ${isOn ? "ON" : "OFF"}${watts}</p>
+                </div>
+              </div>
+              <button type="button" data-quick-device="${escapeHtml(dev.id)}" data-quick-state="${escapeHtml(dev.state)}" aria-pressed="${isOn}" class="shrink-0 px-3.5 py-2 rounded-md border text-xs font-semibold transition-colors ${
+                isOn
+                  ? "bg-tertiary-container/25 border-tertiary/50 text-tertiary hover:bg-tertiary-container/35"
+                  : "bg-primary-container border-primary-container text-on-primary-container hover:brightness-110"
+              }">
+                ${isOn ? "Turn Off" : "Turn On"}
+              </button>
+            </div>
+          `;
+          })
+          .join("")}
+      </section>`
+          : ""
+      }
 
       <!-- Row 1: Live Weather (°C with small °F) + Optional Now Playing Media Deck -->
       <section class="grid grid-cols-1 xl:grid-cols-12 gap-4" aria-label="Weather and Media overview">
@@ -300,7 +344,7 @@ export function renderHomeView(container, { navigate, openQuickFind, openAlerts,
               </div>
             </div>
 
-            <div class="flex items-center justify-between gap-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
               <div class="flex items-center gap-2">
                 <button id="homeMediaPrevBtn" type="button" class="w-9 h-9 rounded-md bg-surface-container-high border border-outline text-on-surface hover:bg-surface-bright flex items-center justify-center transition-colors" aria-label="Previous track">
                   <span class="material-symbols-outlined text-[20px]">skip_previous</span>
@@ -315,9 +359,15 @@ export function renderHomeView(container, { navigate, openQuickFind, openAlerts,
                 </button>
               </div>
 
-              <div class="flex items-center gap-2 font-mono text-[11px] text-on-surface-variant">
-                <span class="material-symbols-outlined text-[16px]">volume_up</span>
-                <span class="tabular-nums text-on-surface">${media?.volume ?? 68}%</span>
+              <div class="flex items-center gap-1.5 font-mono text-[11px] text-on-surface-variant min-w-0">
+                <button id="homeMediaVolDown" type="button" class="w-7 h-7 rounded bg-surface-container-high border border-outline text-on-surface hover:bg-surface-bright flex items-center justify-center transition-colors shrink-0" aria-label="Volume down">
+                  <span class="material-symbols-outlined text-[16px]">volume_down</span>
+                </button>
+                <input id="homeMediaVolSlider" type="range" min="0" max="100" value="${media?.volume ?? 68}" class="dock-slider w-16 sm:w-24" aria-label="Mac Volume" style="background: linear-gradient(to right, #ff6370 ${media?.volume ?? 68}%, #282a2c ${media?.volume ?? 68}%);" />
+                <button id="homeMediaVolUp" type="button" class="w-7 h-7 rounded bg-surface-container-high border border-outline text-on-surface hover:bg-surface-bright flex items-center justify-center transition-colors shrink-0" aria-label="Volume up">
+                  <span class="material-symbols-outlined text-[16px]">volume_up</span>
+                </button>
+                <span id="homeMediaVolLabel" class="tabular-nums text-on-surface w-8 text-right shrink-0">${media?.volume ?? 68}%</span>
               </div>
             </div>
           </div>
@@ -571,6 +621,31 @@ export function renderHomeView(container, { navigate, openQuickFind, openAlerts,
   container.querySelector("#homeMediaPrevBtn")?.addEventListener("click", () => runMedia("prev"));
   container.querySelector("#homeMediaPlayBtn")?.addEventListener("click", () => runMedia("toggle"));
   container.querySelector("#homeMediaNextBtn")?.addEventListener("click", () => runMedia("next"));
+
+  const sendVolume = async (nextVol) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(Number(nextVol) || 0)));
+    try {
+      await controlMedia({ action: "volume", volume: clamped });
+    } catch (err) {
+      showToast(err.message || "Volume update failed", "error");
+    }
+  };
+  const homeVolSlider = container.querySelector("#homeMediaVolSlider");
+  const homeVolLabel = container.querySelector("#homeMediaVolLabel");
+  homeVolSlider?.addEventListener("input", () => {
+    const v = Number(homeVolSlider.value);
+    if (homeVolLabel) homeVolLabel.textContent = `${v}%`;
+    homeVolSlider.style.background = `linear-gradient(to right, #ff6370 ${v}%, #282a2c ${v}%)`;
+  });
+  homeVolSlider?.addEventListener("change", () => sendVolume(homeVolSlider.value));
+  container.querySelector("#homeMediaVolDown")?.addEventListener("click", () => {
+    const cur = Number(homeVolSlider?.value ?? media?.volume ?? 68);
+    sendVolume(cur - 5);
+  });
+  container.querySelector("#homeMediaVolUp")?.addEventListener("click", () => {
+    const cur = Number(homeVolSlider?.value ?? media?.volume ?? 68);
+    sendVolume(cur + 5);
+  });
 
   // Quick Device Switchboard
   container.querySelectorAll("[data-quick-device]").forEach((btn) => {

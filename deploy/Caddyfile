@@ -12,6 +12,7 @@
 		reverse_proxy @streams {$CCTV_UPSTREAM:127.0.0.1:1985}
 
 		root * {$DASHBOARD_ROOT}
+		header Cache-Control "no-cache, must-revalidate"
 		try_files {path} {path}/ /index.html
 		file_server
 	}

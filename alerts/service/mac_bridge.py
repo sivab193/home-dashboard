@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import platform
+import re
 import subprocess
 import time
 from datetime import datetime
@@ -208,6 +209,39 @@ class MacBridge:
     def _media_remote_command(self, action: str) -> bool:
         data = self._run_media_remote(action)
         return bool(data.get("ok"))
+
+    def get_volume(self) -> dict[str, Any] | None:
+        if not self.available:
+            return None
+        try:
+            raw = self._run(["get volume settings"], timeout=2.0)
+        except (RuntimeError, subprocess.TimeoutExpired):
+            return None
+        vol_match = re.search(r"output volume:(\d+)", raw)
+        muted_match = re.search(r"output muted:(true|false)", raw, re.IGNORECASE)
+        if not vol_match:
+            return None
+        return {
+            "volume": max(0, min(100, int(vol_match.group(1)))),
+            "muted": bool(muted_match and muted_match.group(1).lower() == "true"),
+        }
+
+    def set_volume(self, level: int) -> dict[str, Any]:
+        if not self.available:
+            raise RuntimeError("Volume controls are available only on macOS")
+        clamped = max(0, min(100, int(level)))
+        if clamped > 0:
+            self._run([f"set volume output volume {clamped} without output muted"], timeout=3.0)
+        else:
+            self._run(["set volume output volume 0 with output muted"], timeout=3.0)
+        return self.get_volume() or {"volume": clamped, "muted": clamped == 0}
+
+    def set_muted(self, muted: bool) -> dict[str, Any]:
+        if not self.available:
+            raise RuntimeError("Volume controls are available only on macOS")
+        flag = "with output muted" if muted else "without output muted"
+        self._run([f"set volume {flag}"], timeout=3.0)
+        return self.get_volume() or {"volume": 0 if muted else 50, "muted": muted}
 
     def _youtube_tab_script(self, javascript: str) -> str:
         """Run one fixed JavaScript operation in the first YouTube Music tab."""

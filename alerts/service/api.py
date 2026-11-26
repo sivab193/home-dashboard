@@ -401,6 +401,9 @@ def build_app(bus, monitor, snapshot_dir: Path, home=None, music=None,
 
     def media_snapshot():
         raw = mac.music_status() if mac else {"available": False, "state": "unsupported"}
+        vol_info = mac.get_volume() if mac else None
+        volume = vol_info["volume"] if vol_info else 68
+        muted = bool(vol_info["muted"]) if vol_info else False
         available = bool(raw.get("available"))
         state = str(raw.get("state") or "stopped").lower()
         playing = state in {"playing", "play"}
@@ -418,7 +421,8 @@ def build_app(bus, monitor, snapshot_dir: Path, home=None, music=None,
             "playing": playing,
             "shuffle": False,
             "repeat": "off",
-            "volume": 68,
+            "volume": 0 if muted else volume,
+            "muted": muted,
             "positionSec": position,
             "outputZone": "mac",
             "outputLabel": "Mac",
@@ -444,6 +448,29 @@ def build_app(bus, monitor, snapshot_dir: Path, home=None, music=None,
     @app.post("/api/media/control")
     def media_control(command: dict):
         action = str(command.get("action") or "").strip().lower()
+        if action == "volume":
+            if not mac:
+                raise HTTPException(status_code=503, detail="Mac controls are unavailable")
+            try:
+                level = int(command.get("volume"))
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(status_code=400, detail="Volume must be an integer between 0 and 100") from exc
+            try:
+                mac.set_volume(level)
+            except RuntimeError as exc:
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
+            return media_snapshot()
+        if action == "mute":
+            if not mac:
+                raise HTTPException(status_code=503, detail="Mac controls are unavailable")
+            current = mac.get_volume() or {"muted": False}
+            desired = command.get("muted")
+            muted = bool(desired) if desired is not None else not bool(current.get("muted"))
+            try:
+                mac.set_muted(muted)
+            except RuntimeError as exc:
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
+            return media_snapshot()
         if action in {"toggle", "play_pause", "play", "pause", "next", "prev", "previous"}:
             if action == "play":
                 action = "toggle"

@@ -73,6 +73,19 @@ class MacBridgeTests(unittest.TestCase):
         self.assertEqual(result["state"], "paused")
         self.assertEqual(run.call_args_list[0].args[0][-1], "toggle")
 
+    @patch("service.mac_bridge.platform.system", return_value="Darwin")
+    @patch("service.mac_bridge.subprocess.run")
+    def test_volume_get_and_set(self, run, _system):
+        run.side_effect = [
+            subprocess.CompletedProcess([], 0, "output volume:69, input volume:27, alert volume:100, output muted:false\n", ""),
+            subprocess.CompletedProcess([], 0, "", ""),
+            subprocess.CompletedProcess([], 0, "output volume:45, input volume:27, alert volume:100, output muted:false\n", ""),
+        ]
+        self.assertEqual(MacBridge().get_volume(), {"volume": 69, "muted": False})
+        updated = MacBridge().set_volume(45)
+        self.assertEqual(updated, {"volume": 45, "muted": False})
+        self.assertIn("set volume output volume 45 without output muted", " ".join(run.call_args_list[1].args[0]))
+
 
 if __name__ == "__main__":
     unittest.main()
