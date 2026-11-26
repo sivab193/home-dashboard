@@ -6,10 +6,15 @@ arbitrary scripts or shell commands.
 """
 from __future__ import annotations
 
+import json
 import platform
 import subprocess
+import time
 from datetime import datetime
+from pathlib import Path
 from typing import Any
+
+MEDIA_REMOTE_SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "mac-media.swift"
 
 
 class MacBridge:
@@ -41,17 +46,23 @@ class MacBridge:
             return {"available": False, "state": "unsupported"}
         try:
             result = self._youtube_tab_script(self.YOUTUBE_MUSIC_STATUS)
-            if result == "not_open":
-                return self._native_music_status()
-            parts = (result + "\x1f\x1f").split("\x1f")
-            return {"available": True, "state": parts[0], "title": parts[1],
-                    "artist": parts[2], "browser": "Brave Browser"}
+            if result != "not_open":
+                parts = (result + "\x1f\x1f").split("\x1f")
+                return {"available": True, "state": parts[0], "title": parts[1],
+                        "artist": parts[2], "browser": "Brave Browser"}
         except (RuntimeError, subprocess.TimeoutExpired) as exc:
             native = self._native_music_status()
             if native["available"]:
                 return native
+            remote = self._media_remote_status()
+            if remote["available"]:
+                return remote
             return {"available": False, "state": "setup_required",
                     "browser": "Brave Browser", "error": str(exc)}
+        native = self._native_music_status()
+        if native["available"]:
+            return native
+        return self._media_remote_status()
 
     def music_command(self, action: str) -> dict[str, Any]:
         if not self.available:
@@ -84,6 +95,9 @@ class MacBridge:
                 }[action]
                 if self._native_music_command(native_action, native["source"]):
                     return self.music_status()
+            if self._media_remote_command(action):
+                time.sleep(0.15)
+                return self.music_status()
             raise RuntimeError("Open music.youtube.com or a native macOS music app")
         if result in {"no_player", "no_button"}:
             raise RuntimeError("YouTube Music player controls were not found")
@@ -163,6 +177,37 @@ class MacBridge:
             return True
         except (RuntimeError, subprocess.TimeoutExpired):
             return False
+
+    def _run_media_remote(self, *args: str, timeout: float = 4.0) -> dict[str, Any]:
+        if not MEDIA_REMOTE_SCRIPT.is_file():
+            return {}
+        try:
+            completed = subprocess.run(
+                ["/usr/bin/swift", str(MEDIA_REMOTE_SCRIPT), *args],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return {}
+        if completed.returncode != 0 or not completed.stdout.strip():
+            return {}
+        try:
+            parsed = json.loads(completed.stdout.strip().splitlines()[-1])
+            return parsed if isinstance(parsed, dict) else {}
+        except json.JSONDecodeError:
+            return {}
+
+    def _media_remote_status(self) -> dict[str, Any]:
+        data = self._run_media_remote("status")
+        if data.get("available"):
+            return data
+        return {"available": False, "state": "not_open"}
+
+    def _media_remote_command(self, action: str) -> bool:
+        data = self._run_media_remote(action)
+        return bool(data.get("ok"))
 
     def _youtube_tab_script(self, javascript: str) -> str:
         """Run one fixed JavaScript operation in the first YouTube Music tab."""

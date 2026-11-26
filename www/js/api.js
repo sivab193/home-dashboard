@@ -1,5 +1,61 @@
 const API_ORIGIN = (window.HOME_DASHBOARD_API_ORIGIN || window.location.origin).replace(/\/$/, "");
 const STORAGE_KEY = "dockspace.preferences.v1";
+const CCTV_ORIGIN_KEY = "dockspace.cctvOrigin";
+const rawFeatures = window.HOME_DASHBOARD_FEATURES || {};
+export const features = {
+  devices: rawFeatures.devices !== false,
+  media: rawFeatures.media !== false,
+  schedule: rawFeatures.schedule !== false,
+};
+const runtimeDefaults =
+  window.HOME_DASHBOARD_DEFAULTS && typeof window.HOME_DASHBOARD_DEFAULTS === "object"
+    ? window.HOME_DASHBOARD_DEFAULTS
+    : {};
+
+export function normalizeOrigin(value) {
+  const raw = String(value || "").trim().replace(/\/+$/, "");
+  if (!raw) return "";
+  const url = new URL(raw);
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("Feed URL must start with http:// or https://");
+  }
+  return url.origin;
+}
+
+export function getCctvOrigin() {
+  try {
+    const saved = localStorage.getItem(CCTV_ORIGIN_KEY);
+    if (saved) return normalizeOrigin(saved);
+  } catch {
+    // ignore invalid or unavailable storage
+  }
+  return API_ORIGIN;
+}
+
+export function getCctvOriginOverride() {
+  try {
+    return localStorage.getItem(CCTV_ORIGIN_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+export function setCctvOrigin(value) {
+  const normalized = normalizeOrigin(value);
+  try {
+    if (normalized) localStorage.setItem(CCTV_ORIGIN_KEY, normalized);
+    else localStorage.removeItem(CCTV_ORIGIN_KEY);
+  } catch {
+    // ignore storage errors
+  }
+  store.cctvOrigin = getCctvOrigin();
+  return store.cctvOrigin;
+}
+
+export function getCctvWsOrigin() {
+  const origin = getCctvOrigin() || window.location.origin;
+  return origin.replace(/^http/, "ws");
+}
 
 export const store = {
   route: "/",
@@ -27,6 +83,7 @@ export const store = {
       { label: "Tokyo", timeZone: "Asia/Tokyo" },
     ],
     homeQuickDeviceIds: [],
+    ...runtimeDefaults,
   },
   home: { rooms: [], items: [], groups: [], music_reactive_lights: [] },
   automations: {
@@ -40,6 +97,8 @@ export const store = {
   weather: null,
   events: [],
   streams: {},
+  streamsOnline: false,
+  cctvOrigin: "",
   health: {},
   activityLog: [
     {
@@ -206,19 +265,31 @@ function saveLocalPrefs(cfg) {
 }
 
 export async function fetchConfig() {
-  const serverCfg = await apiFetch("/api/config");
   const local = loadLocalPrefs();
-  store.config = { ...store.config, ...serverCfg, ...(local || {}) };
+  let serverCfg = {};
+  if (features.devices || features.media || features.schedule) {
+    try {
+      serverCfg = await apiFetch("/api/config");
+    } catch {
+      serverCfg = {};
+    }
+  }
+  store.config = { ...store.config, ...runtimeDefaults, ...(local || {}), ...serverCfg };
   applyDockVisualPrefs();
   notify("config");
   return store.config;
 }
 
 export async function updateConfig(patch) {
-  const updated = await apiFetch("/api/config", {
-    method: "PATCH",
-    body: JSON.stringify(patch),
-  });
+  let updated = {};
+  try {
+    updated = await apiFetch("/api/config", {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
+  } catch {
+    updated = patch;
+  }
   store.config = { ...store.config, ...updated };
   saveLocalPrefs(store.config);
   applyDockVisualPrefs();
@@ -413,12 +484,18 @@ export async function fetchStocks() {
 }
 
 export async function fetchSecurity() {
-  const [streams, events, health] = await Promise.all([
-    apiFetch("/api/streams").catch(() => ({})),
+  const cctvOrigin = getCctvOrigin();
+  store.cctvOrigin = cctvOrigin;
+  const streamsUrl = `${cctvOrigin}/api/streams`;
+  const [streamsRes, events, health] = await Promise.all([
+    fetch(streamsUrl, { cache: "no-store" })
+      .then(async (res) => (res.ok ? { ok: true, data: await res.json() } : { ok: false, data: {} }))
+      .catch(() => ({ ok: false, data: {} })),
     apiFetch("/api/events").catch(() => []),
     apiFetch("/api/health").catch(() => ({})),
   ]);
-  store.streams = streams || {};
+  store.streams = streamsRes.data && typeof streamsRes.data === "object" ? streamsRes.data : {};
+  store.streamsOnline = Boolean(streamsRes.ok);
   store.events = Array.isArray(events) ? events : [];
   store.health = health || {};
   notify("security");
@@ -637,13 +714,9 @@ export function sparklineSvg(points, color = "#82d8a6", width = 88, height = 28)
 
 export async function bootstrapData() {
   await fetchConfig().catch(() => {});
-  await Promise.allSettled([
-    fetchHome(),
-    fetchAutomations(),
-    fetchMedia(),
-    fetchSchedule(),
-    fetchWeather(),
-    fetchStocks(),
-    fetchSecurity(),
-  ]);
+  const tasks = [fetchWeather(), fetchStocks(), fetchSecurity()];
+  if (features.devices) tasks.push(fetchHome(), fetchAutomations());
+  if (features.media) tasks.push(fetchMedia());
+  if (features.schedule) tasks.push(fetchSchedule());
+  await Promise.allSettled(tasks);
 }

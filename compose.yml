@@ -39,7 +39,10 @@ services:
     env_file:
       - path: .env
         required: false
-    command: ["-config", "/config/go2rtc.yaml"]
+    environment:
+      LAN_IP: ${LAN_IP:-127.0.0.1}
+      TAILSCALE_IP: ${TAILSCALE_IP:-127.0.0.1}
+    command: ["go2rtc", "-config", "/config/go2rtc.yaml"]
     ports:
       - "1985:1984"
       - "8554:8554"

@@ -9,7 +9,7 @@
 		reverse_proxy @alerts 127.0.0.1:8091
 
 		@streams path /api/streams /api/streams/* /api/ws /api/ws/*
-		reverse_proxy @streams 127.0.0.1:1985
+		reverse_proxy @streams {$CCTV_UPSTREAM:127.0.0.1:1985}
 
 		root * {$DASHBOARD_ROOT}
 		try_files {path} {path}/ /index.html

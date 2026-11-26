@@ -3,8 +3,10 @@ import {
   commandHomeEntity,
   controlMedia,
   escapeHtml,
+  features,
   fetchHome,
   fetchMedia,
+  fetchSecurity,
   fetchWeather,
   formatTime,
   showToast,
@@ -23,25 +25,32 @@ import { renderConfigureWidgetView } from "./views/configure-widget.js";
 import { renderConfigView } from "./views/config.js";
 import { renderDockScreen, stopDockScreen } from "./views/dock.js";
 
-const ROUTES = [
+const ALL_ROUTES = [
   { path: "/", label: "Home", icon: "home", keywords: "dashboard overview kpi shift lighting" },
   { path: "/dock", label: "Dock Screen", icon: "desktop_windows", keywords: "clock fullscreen ambient display status" },
-  { path: "/media", label: "Media", icon: "play_circle", keywords: "audio music airpods speakers queue" },
+  { path: "/media", label: "Media", icon: "play_circle", keywords: "audio music airpods speakers queue", feature: "media" },
   { path: "/weather", label: "Weather", icon: "partly_cloudy_day", keywords: "forecast radar humidity wind aqi" },
-  { path: "/schedule", label: "Schedule", icon: "calendar_today", keywords: "calendar shift timeline events" },
-  { path: "/automations", label: "Automations", icon: "schedule", keywords: "rules time schedule devices groups rooms" },
-  { path: "/controls", label: "Smart Home", icon: "deployed_code", keywords: "lights rooms switches plugs sensors" },
-  { path: "/floorplan", label: "3D Floorplan", icon: "view_in_ar", keywords: "diorama 3d map house model" },
+  { path: "/schedule", label: "Schedule", icon: "calendar_today", keywords: "calendar shift timeline events", feature: "schedule" },
+  { path: "/automations", label: "Automations", icon: "schedule", keywords: "rules time schedule devices groups rooms", feature: "devices" },
+  { path: "/controls", label: "Smart Home", icon: "deployed_code", keywords: "lights rooms switches plugs sensors", feature: "devices" },
+  { path: "/floorplan", label: "3D Floorplan", icon: "view_in_ar", keywords: "diorama 3d map house model", feature: "devices" },
   { path: "/security", label: "Security", icon: "videocam", keywords: "cameras cctv dvr streams alerts" },
   { path: "/configure-widget", label: "Configure Widget", icon: "dashboard_customize", keywords: "layout modules stocks preview" },
   { path: "/config", label: "Config", icon: "tune", keywords: "preferences opacity account clock dock" },
 ];
 
+const ROUTES = ALL_ROUTES.filter((r) => !r.feature || features[r.feature] !== false);
+
+function isNavPathEnabled(path) {
+  const match = ALL_ROUTES.find((r) => r.path === path);
+  return !match?.feature || features[match.feature] !== false;
+}
+
 function normalizeRoute(pathname) {
   const clean = (pathname || "/").replace(/\/+$/, "") || "/";
   if (clean === "/home" || clean === "/dashboard") return "/";
-  if (clean === "/home/controls") return "/controls";
-  if (clean === "/home/floorplan") return "/floorplan";
+  if (clean === "/home/controls") return isNavPathEnabled("/controls") ? "/controls" : "/";
+  if (clean === "/home/floorplan") return isNavPathEnabled("/floorplan") ? "/floorplan" : "/";
   if (ROUTES.some((r) => r.path === clean)) return clean;
   return "/";
 }
@@ -358,6 +367,9 @@ export function navigate(path, push = true) {
   }
   setMobileNav(false);
   renderCurrentRoute();
+  if (next === "/security") {
+    fetchSecurity().catch(() => {});
+  }
 }
 
 function updateHeaderClock() {
@@ -368,11 +380,16 @@ function updateHeaderClock() {
 async function init() {
   store.route = normalizeRoute(window.location.pathname);
 
-  // Wire sidebar nav clicks
+  // Wire sidebar nav clicks (and hide disabled feature routes)
   document.querySelectorAll("[data-nav]").forEach((el) => {
+    const navPath = el.getAttribute("data-nav");
+    if (!isNavPathEnabled(navPath)) {
+      el.classList.add("hidden");
+      return;
+    }
     el.addEventListener("click", (e) => {
       e.preventDefault();
-      navigate(el.getAttribute("data-nav"));
+      navigate(navPath);
     });
   });
 
@@ -422,11 +439,12 @@ async function init() {
 
   setupActionModal();
 
-  // Re-render current view when store updates (avoid tearing down 3D floorplan canvas unnecessarily)
+  // Re-render current view when store updates (avoid tearing down 3D floorplan or live video streams unnecessarily)
   subscribe((reason) => {
     updateHeaderClock();
     renderAlertsDrawer();
     if (store.route === "/floorplan" && reason !== "route") return;
+    if (store.route === "/security" && reason !== "route" && reason !== "security") return;
     renderCurrentRoute();
   });
 
@@ -439,8 +457,8 @@ async function init() {
   renderCurrentRoute();
 
   // Gentle live telemetry refresh
-  setInterval(() => fetchHome().catch(() => {}), 30_000);
-  setInterval(() => fetchMedia().catch(() => {}), 5_000);
+  if (features.devices) setInterval(() => fetchHome().catch(() => {}), 30_000);
+  if (features.media) setInterval(() => fetchMedia().catch(() => {}), 5_000);
   setInterval(() => fetchWeather().catch(() => {}), 300_000);
 }
 

@@ -3,6 +3,7 @@ import {
   commandHomeEntity,
   controlMedia,
   escapeHtml,
+  features,
   fToC,
   formatDuration,
   logActivity,
@@ -14,12 +15,14 @@ import {
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const WORLD_CLOCK_PRESETS = [
+  { label: "West Lafayette", timeZone: "America/New_York" },
   { label: "San Francisco", timeZone: "America/Los_Angeles" },
   { label: "New York", timeZone: "America/New_York" },
   { label: "Chicago", timeZone: "America/Chicago" },
   { label: "London", timeZone: "Europe/London" },
   { label: "Paris", timeZone: "Europe/Paris" },
   { label: "Dubai", timeZone: "Asia/Dubai" },
+  { label: "Hosur", timeZone: "Asia/Kolkata" },
   { label: "Bengaluru", timeZone: "Asia/Kolkata" },
   { label: "Singapore", timeZone: "Asia/Singapore" },
   { label: "Tokyo", timeZone: "Asia/Tokyo" },
@@ -179,8 +182,13 @@ export function renderHomeView(container, { navigate, openQuickFind, openAlerts,
             <span class="text-primary-container">DOCKSPACE</span>
             <span class="mx-1.5 text-outline-strong">/</span>
             <span>${escapeHtml(cfg.userName)}</span>
-            <span class="mx-1.5 text-outline-strong">·</span>
-            <span id="homeHeaderActiveCount" class="text-tertiary">${activeDevices.length} Active Devices</span>
+            ${
+              features.devices
+                ? `<span class="mx-1.5 text-outline-strong">·</span>
+            <span id="homeHeaderActiveCount" class="text-tertiary">${activeDevices.length} Active Devices</span>`
+                : `<span class="mx-1.5 text-outline-strong">·</span>
+            <span class="text-tertiary">${escapeHtml(cfg.studioName || "Home")}</span>`
+            }
           </p>
           <h1 class="font-headline text-[28px] leading-[34px] font-semibold tracking-tight text-on-surface">Home</h1>
         </div>
@@ -198,10 +206,10 @@ export function renderHomeView(container, { navigate, openQuickFind, openAlerts,
         </div>
       </div>
 
-      <!-- Row 1: Live Weather (°C with small °F) + Now Playing Media Deck -->
+      <!-- Row 1: Live Weather (°C with small °F) + Optional Now Playing Media Deck -->
       <section class="grid grid-cols-1 xl:grid-cols-12 gap-4" aria-label="Weather and Media overview">
         <!-- Live Weather Card -->
-        <article class="xl:col-span-6 dock-surface-card rounded-lg p-5 flex flex-col justify-between gap-4">
+        <article class="${features.media ? "xl:col-span-6" : "xl:col-span-12"} dock-surface-card rounded-lg p-5 flex flex-col justify-between gap-4">
           <div class="flex items-start justify-between gap-3">
             <div class="flex items-center gap-3">
               <div class="w-10 h-10 rounded-md bg-surface-container-high border border-outline flex items-center justify-center shrink-0">
@@ -249,7 +257,9 @@ export function renderHomeView(container, { navigate, openQuickFind, openAlerts,
           </div>
         </article>
 
-        <!-- Now Playing & Media Controls Card -->
+        ${
+          features.media
+            ? `<!-- Now Playing & Media Controls Card -->
         <article class="xl:col-span-6 dock-surface-card rounded-lg p-5 flex flex-col justify-between gap-4" style="background-image: radial-gradient(circle at 18% 45%, rgba(255, 99, 112, 0.1), transparent 58%);">
           <div class="flex items-start justify-between gap-3">
             <div class="flex items-center gap-3.5 min-w-0">
@@ -311,7 +321,8 @@ export function renderHomeView(container, { navigate, openQuickFind, openAlerts,
               </div>
             </div>
           </div>
-        </article>
+        </article>` : ""
+        }
       </section>
 
       <!-- Row 2: 5 World Clocks -->
@@ -349,10 +360,14 @@ export function renderHomeView(container, { navigate, openQuickFind, openAlerts,
         </div>
       </section>
 
-      <!-- Row 3: Configurable Device Quick-Switch Board + Calendar & Schedule -->
+      ${
+        features.devices || features.schedule
+          ? `<!-- Row 3: Configurable Device Quick-Switch Board + Calendar & Schedule -->
       <section class="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
-        <!-- Quick Device Controls (Configurable On/Off Buttons) -->
-        <div class="xl:col-span-7 dock-surface-card rounded-lg p-5 space-y-4">
+        ${
+          features.devices
+            ? `<!-- Quick Device Controls (Configurable On/Off Buttons) -->
+        <div class="${features.schedule ? "xl:col-span-7" : "xl:col-span-12"} dock-surface-card rounded-lg p-5 space-y-4">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <div class="flex items-center gap-2.5">
               <span class="material-symbols-outlined text-[19px] text-primary-container">power_settings_new</span>
@@ -434,10 +449,13 @@ export function renderHomeView(container, { navigate, openQuickFind, openAlerts,
               <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
             </button>
           </div>
-        </div>
+        </div>` : ""
+        }
 
-        <!-- Calendar & Schedule Panel -->
-        <div class="xl:col-span-5 dock-surface-card rounded-lg p-5 space-y-4">
+        ${
+          features.schedule
+            ? `<!-- Calendar & Schedule Panel -->
+        <div class="${features.devices ? "xl:col-span-5" : "xl:col-span-12"} dock-surface-card rounded-lg p-5 space-y-4">
           <div class="flex items-center justify-between gap-2">
             <div class="flex items-center gap-2">
               <span class="material-symbols-outlined text-[19px] text-primary-container">calendar_month</span>
@@ -489,8 +507,10 @@ export function renderHomeView(container, { navigate, openQuickFind, openAlerts,
                 .join("")}
             </div>
           </div>
-        </div>
-      </section>
+        </div>` : ""
+        }
+      </section>` : ""
+      }
 
       <!-- Row 4: Compact Market Watchlist -->
       <section class="dock-surface-card rounded-lg p-4" aria-label="Market watchlist">

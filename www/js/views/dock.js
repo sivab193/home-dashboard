@@ -1,4 +1,4 @@
-import { controlMedia, escapeHtml, fToC, showToast, store } from "../api.js";
+import { controlMedia, escapeHtml, features, fToC, showToast, store } from "../api.js";
 
 let clockTimer = null;
 const WEST_LAFAYETTE_TIME_ZONE = "America/Indiana/Indianapolis";
@@ -120,16 +120,22 @@ export function renderDockScreen(container, { navigate, toggleFullscreen }) {
             <span class="material-symbols-outlined dock-weather-icon" aria-hidden="true">${escapeHtml(weather?.icon || "partly_cloudy_day")}</span>
           </section>
 
-          <section class="dock-glance-row" aria-labelledby="dockHomeTitle">
+          ${
+            features.devices
+              ? `<section class="dock-glance-row" aria-labelledby="dockHomeTitle">
             <div>
               <h2 id="dockHomeTitle" class="dock-glance-label">Smart home</h2>
               <p class="dock-glance-value">${activeDevices.length}<span class="dock-glance-unit"> on</span></p>
               <p class="dock-glance-detail">${controllable.length} connected devices</p>
             </div>
             <span class="material-symbols-outlined dock-glance-icon" aria-hidden="true">home_iot_device</span>
-          </section>
+          </section>`
+              : ""
+          }
 
-          <section class="dock-glance-row" aria-labelledby="dockMediaTitle">
+          ${
+            features.media
+              ? `<section class="dock-glance-row" aria-labelledby="dockMediaTitle">
             <div class="min-w-0">
               <h2 id="dockMediaTitle" class="dock-glance-label">${isPlaying ? "Now playing" : "Media"}</h2>
               <p class="dock-media-title">${escapeHtml(isPlaying ? media.track.title : "Nothing playing")}</p>
@@ -147,12 +153,16 @@ export function renderDockScreen(container, { navigate, toggleFullscreen }) {
               </div>
             </div>
             <span class="material-symbols-outlined dock-glance-icon" aria-hidden="true">${isPlaying ? "graphic_eq" : "music_note"}</span>
-          </section>
+          </section>`
+              : ""
+          }
         </div>
       </div>
 
       <footer class="dock-screen-footer">
-        <section aria-labelledby="dockNextTitle" class="min-w-0">
+        ${
+          features.schedule
+            ? `<section aria-labelledby="dockNextTitle" class="min-w-0">
           <h2 id="dockNextTitle" class="dock-glance-label">Coming up</h2>
           ${events.length ? `
             <div class="dock-event-list">
@@ -162,7 +172,9 @@ export function renderDockScreen(container, { navigate, toggleFullscreen }) {
                   <span class="dock-event-title">${escapeHtml(event.title)}</span>
                 </div>`).join("")}
             </div>` : `<p class="dock-event-empty">No more scheduled events today</p>`}
-        </section>
+        </section>`
+            : `<span></span>`
+        }
         <p class="dock-screen-hint">Press Esc to leave full screen</p>
       </footer>
     </section>`;
